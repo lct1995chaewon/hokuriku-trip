@@ -51,21 +51,22 @@ import {
   getDoc
 } from 'firebase/firestore';
 
-// --- 1. 設定 Gemini API Key (已填入您的 Key) ---
+// --- API Key & Config ---
+
+// 1. 設定 Gemini API Key
 const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
 
-// --- 2. Firebase 設定 (包含自動切換邏輯) ---
+// 2. Firebase 設定
 let firebaseConfig;
 try {
-  // 嘗試讀取預覽環境變數 (只有在預覽器中才會有)
+  // 嘗試讀取環境變數
   if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = JSON.parse(__firebase_config);
   } else {
-    // 如果沒有環境變數，就手動拋出錯誤，進入 catch 區塊使用您的設定
-    throw new Error('Local/Vercel environment');
+    throw new Error('Environment config not found');
   }
 } catch (e) {
-  // --- 您的個人 Firebase 設定 (用於部署後) ---
+  // --- 您的個人 Firebase 設定 ---
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -77,12 +78,10 @@ try {
   };
 }
 
-// 初始化 Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// 設定 App ID (部署後固定使用您的 ID)
-const appId = typeof __app_id !== 'undefined' ? __app_id : '1:170805929872:web:ade0f3cc9f27ad7a84f515';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-hokuriku-trip';
 
 // --- 輔助資料 ---
 const DATES = [
@@ -132,16 +131,48 @@ const MISSIONS = [
   { id: 'winter_train', title: '鐵道旅情', desc: '搭乘新幹線或特色列車', location: '北陸', icon: '🚅' },
 ];
 
-// --- 輔助函式 ---
-const fileToBase64 = (file) => {
+// --- 輔助函式：圖片壓縮與處理 ---
+// 這可以解決手機照片太大或格式(HEIC)不支援的問題
+const processImageForAI = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        // 設定最大寬度或高度，避免圖片過大
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 轉成 JPEG 格式，品質 0.8 (這會解決 HEIC 格式問題)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const base64 = dataUrl.split(',')[1];
+        resolve({ base64, mimeType: 'image/jpeg' });
+      };
+      img.onerror = (error) => reject(error);
     };
-    reader.onerror = error => reject(error);
+    reader.onerror = (error) => reject(error);
   });
 };
 
@@ -179,13 +210,10 @@ export default function App() {
 
   useEffect(() => {
     const initAuth = async () => {
-      // 嘗試讀取環境變數中的 token，如果沒有就直接匿名登入
-      // 這樣可以避免在沒有 token 的環境下報錯
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
         try {
             await signInWithCustomToken(auth, __initial_auth_token);
         } catch (e) {
-            console.warn("Custom token failed, falling back to anonymous", e);
             await signInAnonymously(auth);
         }
       } else {
@@ -235,7 +263,7 @@ export default function App() {
         )}
       </main>
 
-      {/* 2. 懸浮導航島 (Floating Dock) - 修正定位 */}
+      {/* 2. 懸浮導航島 (Floating Dock) */}
       <nav className="absolute bottom-6 left-4 right-4 h-16 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-full z-30 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
         <div className="grid grid-cols-5 h-full items-center justify-items-center relative">
             <TabButton 
@@ -1003,7 +1031,7 @@ function ExpensesView({ user }) {
     setScanError(null);
 
     try {
-      const base64Data = await fileToBase64(fileRef.current);
+      const { base64 } = await processImageForAI(fileRef.current);
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1011,7 +1039,7 @@ function ExpensesView({ user }) {
           contents: [{
             parts: [
               { text: "Analyze this receipt image. Extract the total amount (number only) and a short description. If the description is in Japanese, translate it to Traditional Chinese (繁體中文). Return ONLY valid JSON format: {\"amount\": number, \"description\": \"string\"}. If uncertain, amount is 0." },
-              { inline_data: { mime_type: fileRef.current.type || "image/jpeg", data: base64Data } }
+              { inline_data: { mime_type: "image/jpeg", data: base64 } }
             ]
           }],
           generationConfig: { responseMimeType: "application/json" }
@@ -1158,7 +1186,7 @@ function ExpensesView({ user }) {
         <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
                 <input 
-                    输入="number" 
+                    type="number" 
                     placeholder="¥ 金額" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -1167,7 +1195,7 @@ function ExpensesView({ user }) {
             </div>
             <div className="col-span-2">
                 <input 
-                    输入="text" 
+                    type="text" 
                     placeholder="說明..." 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1177,7 +1205,7 @@ function ExpensesView({ user }) {
         </div>
 
         <button 
-          输入="submit" 
+          type="submit" 
           disabled={isSubmitting || !amount || isAnalyzing}
           className="w-full bg-white text-black py-3.5 rounded-xl font-black text-sm uppercase tracking-wide shadow-lg hover:bg-zinc-200 active:scale-[0.98] transition-all disabled:opacity-30 disabled:shadow-none flex items-center justify-center gap-2"
         >
