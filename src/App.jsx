@@ -1010,7 +1010,7 @@ function ExpensesView({ user }) {
         body: JSON.stringify({
           contents: [{
             parts: [
-              { text: "Analyze this receipt image. Extract total amount (number only) and description. Return JSON: {\"amount\": number, \"description\": \"string\"}. If uncertain, amount 0." },
+              { text: "Analyze this receipt image. Extract the total amount (number only) and a short description. If the description is in Japanese, translate it to Traditional Chinese (繁體中文). Return ONLY valid JSON format: {\"amount\": number, \"description\": \"string\"}. If uncertain, amount is 0." },
               { inline_data: { mime_type: fileRef.current.type || "image/jpeg", data: base64Data } }
             ]
           }],
@@ -1158,7 +1158,7 @@ function ExpensesView({ user }) {
         <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
                 <input 
-                    type="number" 
+                    输入="number" 
                     placeholder="¥ 金額" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -1167,7 +1167,7 @@ function ExpensesView({ user }) {
             </div>
             <div className="col-span-2">
                 <input 
-                    type="text" 
+                    输入="text" 
                     placeholder="說明..." 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1177,7 +1177,7 @@ function ExpensesView({ user }) {
         </div>
 
         <button 
-          type="submit" 
+          输入="submit" 
           disabled={isSubmitting || !amount || isAnalyzing}
           className="w-full bg-white text-black py-3.5 rounded-xl font-black text-sm uppercase tracking-wide shadow-lg hover:bg-zinc-200 active:scale-[0.98] transition-all disabled:opacity-30 disabled:shadow-none flex items-center justify-center gap-2"
         >
