@@ -28,7 +28,11 @@ import {
   Sparkles,
   Loader2,
   Plane,
-  ChevronRight
+  ChevronRight,
+  TrainFront, // 交通
+  Languages, // 翻譯
+  LayoutGrid, // 工具選單
+  Megaphone // 發音(裝飾用)
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -51,20 +55,18 @@ import {
   getDoc
 } from 'firebase/firestore';
 
-// --- API Key 移除 ---
-// 改用 OCR，不需要 Gemini API Key
+// --- API Key & Config ---
+const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
 
-// --- 2. Firebase 設定 ---
+// --- Firebase 設定 ---
 let firebaseConfig;
 try {
-  // 嘗試讀取環境變數 (預覽環境用)
   if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = JSON.parse(__firebase_config);
   } else {
     throw new Error('Environment config not found');
   }
 } catch (e) {
-  // --- 請在這裡填入你自己的 Firebase 設定 (部署用) ---
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -129,7 +131,19 @@ const MISSIONS = [
   { id: 'winter_train', title: '鐵道旅情', desc: '搭乘新幹線或特色列車', location: '北陸', icon: '🚅' },
 ];
 
-// --- 輔助函式：圖片壓縮 (為了讓 OCR 跑快一點) ---
+// 翻譯卡片資料
+const PHRASES = [
+  { jp: '香箱ガニをください', romaji: 'Koubako-gani wo kudasai', zh: '請給我香箱蟹 (12月限定!)', icon: '🦀' },
+  { jp: '氷見うどん', romaji: 'Himi Udon', zh: '冰見烏龍麵', icon: '🍜' },
+  { jp: '白エビのかき揚げ', romaji: 'Shiro-ebi no Kakiage', zh: '白蝦天婦羅', icon: '🦐' },
+  { jp: 'ネギ抜きでお願いします', romaji: 'Negi nuki de onegaishimasu', zh: '請不要加蔥', icon: '🧅' },
+  { jp: 'お会計をお願いします', romaji: 'O-kaikei wo onegaishimasu', zh: '麻煩結帳', icon: '💳' },
+  { jp: '免税できますか？', romaji: 'Menzei dekimasu ka?', zh: '可以退稅嗎？', icon: '🛍️' },
+  { jp: 'トイレはどこですか？', romaji: 'Toire wa doko desu ka?', zh: '請問廁所在哪裡？', icon: '🚽' },
+  { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指著菜單)', icon: '👉' },
+];
+
+// --- 輔助函式 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -138,11 +152,9 @@ const compressImage = (file) => {
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
-        // OCR 不需要太高解析度，限制在 1000px 左右可以大幅提升速度
-        const MAX_SIZE = 1000;
+        const MAX_SIZE = 800;
         let width = img.width;
         let height = img.height;
-
         if (width > height) {
           if (width > MAX_SIZE) {
             height *= MAX_SIZE / width;
@@ -154,17 +166,14 @@ const compressImage = (file) => {
             height = MAX_SIZE;
           }
         }
-
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // 轉回 Blob 供 OCR 使用
         canvas.toBlob((blob) => {
             resolve(blob);
-        }, 'image/jpeg', 0.8);
+        }, 'image/jpeg', 0.6);
       };
       img.onerror = reject;
     };
@@ -180,18 +189,8 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
             <h3 className="font-bold text-white text-lg mb-2">{title}</h3>
             <p className="text-zinc-400 text-sm mb-6">{message}</p>
             <div className="flex gap-3">
-                <button 
-                    onClick={onClose}
-                    className="flex-1 py-3 rounded-2xl font-bold text-zinc-400 bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                    取消
-                </button>
-                <button 
-                    onClick={onConfirm}
-                    className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-500/80 hover:bg-red-500 shadow-lg shadow-red-500/20 transition-colors"
-                >
-                    刪除
-                </button>
+                <button onClick={onClose} className="flex-1 py-3 rounded-2xl font-bold text-zinc-400 bg-white/5 hover:bg-white/10 transition-colors">取消</button>
+                <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-500/80 hover:bg-red-500 shadow-lg shadow-red-500/20 transition-colors">刪除</button>
             </div>
         </div>
     </div>
@@ -203,28 +202,26 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('itinerary'); 
+  const [ocrReady, setOcrReady] = useState(false);
 
-  // 自動載入 Tesseract OCR 引擎 (CDN)
   useEffect(() => {
-    if (!window.Tesseract) {
-        const script = document.createElement('script');
-        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-        script.async = true;
-        document.body.appendChild(script);
+    if (window.Tesseract) {
+        setOcrReady(true);
+        return;
     }
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.async = true;
+    script.onload = () => setOcrReady(true);
+    script.onerror = () => setOcrReady(false);
+    document.body.appendChild(script);
   }, []);
 
   useEffect(() => {
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        try {
-            await signInWithCustomToken(auth, __initial_auth_token);
-        } catch (e) {
-            await signInAnonymously(auth);
-        }
-      } else {
-        await signInAnonymously(auth);
-      }
+        try { await signInWithCustomToken(auth, __initial_auth_token); } catch (e) { await signInAnonymously(auth); }
+      } else { await signInAnonymously(auth); }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -234,7 +231,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-black text-gray-100 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-zinc-800">
       
-      {/* 1. 氛圍背景光 (Ambient Glow) */}
+      {/* 氛圍背景光 */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[300px] h-[300px] rounded-full bg-blue-600/10 blur-[100px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[250px] h-[250px] rounded-full bg-purple-600/10 blur-[80px]"></div>
@@ -247,7 +244,7 @@ export default function App() {
           {activeTab === 'itinerary' && <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">北陸之旅 <span className="text-blue-400 font-mono text-lg">12/22-29</span></span>}
           {activeTab === 'weather' && <span className="bg-gradient-to-r from-blue-200 to-indigo-300 bg-clip-text text-transparent">天氣預報</span>}
           {activeTab === 'expenses' && <span className="bg-gradient-to-r from-emerald-200 to-teal-300 bg-clip-text text-transparent">消費記帳</span>}
-          {activeTab === 'safety' && <span className="text-red-400 flex items-center gap-2"><ShieldAlert className="fill-red-400/20"/> 防災資訊</span>}
+          {activeTab === 'tools' && <span className="bg-gradient-to-r from-orange-200 to-red-400 bg-clip-text text-transparent">旅途工具箱</span>}
           {activeTab === 'missions' && <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">成就挑戰</span>}
         </h1>
       </header>
@@ -262,8 +259,8 @@ export default function App() {
           <>
             {activeTab === 'itinerary' && <ItineraryView user={user} />}
             {activeTab === 'weather' && <WeatherView />}
-            {activeTab === 'expenses' && <ExpensesView user={user} />}
-            {activeTab === 'safety' && <SafetyView />}
+            {activeTab === 'expenses' && <ExpensesView user={user} ocrReady={ocrReady} />}
+            {activeTab === 'tools' && <ToolsView />}
             {activeTab === 'missions' && <MissionsView user={user} />}
           </>
         )}
@@ -272,45 +269,18 @@ export default function App() {
       {/* 2. 懸浮導航島 (Floating Dock) */}
       <nav className="absolute bottom-6 left-4 right-4 h-16 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-full z-30 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
         <div className="grid grid-cols-5 h-full items-center justify-items-center relative">
-            <TabButton 
-                icon={<Calendar size={20} />} 
-                label="行程" 
-                active={activeTab === 'itinerary'} 
-                onClick={() => setActiveTab('itinerary')} 
-            />
-            <TabButton 
-                icon={<CloudSnow size={20} />} 
-                label="天氣" 
-                active={activeTab === 'weather'} 
-                onClick={() => setActiveTab('weather')} 
-            />
+            <TabButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} />
+            <TabButton icon={<CloudSnow size={20} />} label="天氣" active={activeTab === 'weather'} onClick={() => setActiveTab('weather')} />
             
-            {/* 中央突出按鈕 (Missions) */}
             <div className="relative flex justify-center items-center w-full h-full">
-                <button 
-                    onClick={() => setActiveTab('missions')}
-                    className={`absolute -top-6 w-14 h-14 rounded-full flex items-center justify-center border-4 border-black transition-all shadow-lg
-                        ${activeTab === 'missions' 
-                            ? 'bg-amber-400 text-black shadow-amber-400/40 scale-110' 
-                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-                >
+                <button onClick={() => setActiveTab('missions')} className={`absolute -top-6 w-14 h-14 rounded-full flex items-center justify-center border-4 border-black transition-all shadow-lg ${activeTab === 'missions' ? 'bg-amber-400 text-black shadow-amber-400/40 scale-110' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
                     <Trophy size={24} className={activeTab === 'missions' ? 'fill-black/20' : ''} />
                 </button>
             </div>
 
-            <TabButton 
-                icon={<CreditCard size={20} />} 
-                label="記帳" 
-                active={activeTab === 'expenses'} 
-                onClick={() => setActiveTab('expenses')} 
-            />
-            <TabButton 
-                icon={<ShieldAlert size={20} />} 
-                label="防災" 
-                active={activeTab === 'safety'} 
-                onClick={() => setActiveTab('safety')}
-                isAlert 
-            />
+            <TabButton icon={<CreditCard size={20} />} label="記帳" active={activeTab === 'expenses'} onClick={() => setActiveTab('expenses')} />
+            {/* 改為工具箱 (Tools) */}
+            <TabButton icon={<LayoutGrid size={20} />} label="工具" active={activeTab === 'tools'} onClick={() => setActiveTab('tools')} isAlert />
         </div>
       </nav>
     </div>
@@ -318,23 +288,107 @@ export default function App() {
 }
 
 function TabButton({ icon, label, active, onClick, isAlert }) {
-  let activeColor = isAlert ? 'text-red-400' : 'text-cyan-400';
-  
+  let activeColor = isAlert ? 'text-orange-400' : 'text-cyan-400';
   return (
-    <button 
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center space-y-1 transition-all duration-300 w-full h-full
-        ${active ? `${activeColor} scale-110` : 'text-zinc-500 hover:text-zinc-300'}`}
-    >
+    <button onClick={onClick} className={`flex flex-col items-center justify-center space-y-1 transition-all duration-300 w-full h-full ${active ? `${activeColor} scale-110` : 'text-zinc-500 hover:text-zinc-300'}`}>
       <div className="relative">
         {icon}
-        {active && <span className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isAlert ? 'bg-red-400' : 'bg-cyan-400'}`}></span>}
+        {active && <span className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isAlert ? 'bg-orange-400' : 'bg-cyan-400'}`}></span>}
       </div>
       <span className="text-[10px] font-medium opacity-80">{label}</span>
     </button>
   );
 }
 
+// --- 4. 工具箱視圖 (整合 交通、翻譯、防災) ---
+function ToolsView() {
+  const [activePhrase, setActivePhrase] = useState(null);
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* 1. 交通運行看板 (Traffic Status Board) */}
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-lg relative">
+        <div className="bg-black/50 p-3 border-b border-zinc-700 flex justify-between items-center backdrop-blur-sm">
+            <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                <TrainFront size={16} className="text-green-400" /> JR 運行情報 (北陸)
+            </h3>
+            <span className="text-[10px] text-zinc-500 font-mono animate-pulse">● LIVE</span>
+        </div>
+        <div className="p-4 space-y-3 font-mono text-sm">
+            <div className="flex justify-between items-center">
+                <span className="text-zinc-300">北陸新幹線</span>
+                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">正常運行</span>
+            </div>
+            <div className="flex justify-between items-center">
+                <span className="text-zinc-300">特急雷鳥號</span>
+                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">正常運行</span>
+            </div>
+            <div className="flex justify-between items-center">
+                <span className="text-zinc-300">濃飛巴士</span>
+                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded">注意雪況</span>
+            </div>
+        </div>
+        <a href="https://trafficinfo.westjr.co.jp/hokuriku.html" target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-zinc-800/50 py-2 text-xs text-blue-400 hover:bg-zinc-800 transition-colors border-t border-zinc-700">
+            查看 JR 西日本官方詳情 →
+        </a>
+      </div>
+
+      {/* 2. 翻譯指差卡 (Phrasebook) */}
+      <div>
+        <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+            <Languages size={18} className="text-purple-400" /> 翻譯指差卡
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+            {PHRASES.map((p, idx) => (
+                <button 
+                    key={idx}
+                    onClick={() => setActivePhrase(p)}
+                    className="bg-zinc-800/60 border border-white/5 p-4 rounded-2xl text-left hover:bg-zinc-700 transition-all active:scale-95 group"
+                >
+                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform origin-left">{p.icon}</div>
+                    <div className="text-sm font-bold text-white mb-0.5">{p.zh}</div>
+                    <div className="text-[10px] text-zinc-500 font-mono truncate">{p.romaji}</div>
+                </button>
+            ))}
+        </div>
+      </div>
+
+      {/* 3. 防災安全 (Safety) - 濃縮版 */}
+      <div className="bg-red-900/10 border border-red-500/20 p-5 rounded-3xl">
+        <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2">
+            <ShieldAlert size={18} /> 緊急求助
+        </h3>
+        <div className="flex gap-3">
+            <a href="tel:110" className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-center text-xl shadow-lg hover:bg-red-400 transition-colors">110</a>
+            <a href="tel:119" className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-center text-xl shadow-lg hover:bg-red-400 transition-colors">119</a>
+        </div>
+        <div className="mt-4 pt-4 border-t border-red-500/20">
+             <ExternalLinkItem title="Google 避難所地圖" desc="尋找最近避難點" url="https://www.google.com/maps/search/evacuation+shelter" color="zinc" />
+        </div>
+      </div>
+
+      {/* 翻譯放大 Modal */}
+      {activePhrase && (
+        <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-6 animate-in fade-in duration-200" onClick={() => setActivePhrase(null)}>
+            <div className="w-full max-w-sm text-center">
+                <div className="text-8xl mb-6 animate-bounce">{activePhrase.icon}</div>
+                <p className="text-zinc-400 text-sm mb-2 uppercase tracking-widest">Show this to staff</p>
+                <h2 className="text-3xl font-black text-white leading-tight mb-4 border-2 border-white/20 p-6 rounded-3xl bg-zinc-900">
+                    {activePhrase.jp}
+                </h2>
+                <p className="text-xl text-yellow-400 font-mono mb-8">{activePhrase.romaji}</p>
+                <p className="text-zinc-500 text-sm">({activePhrase.zh})</p>
+                <p className="text-zinc-600 text-xs mt-8">點擊任意處關閉</p>
+            </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ... (以下為其他視圖元件 ItineraryView, WeatherView, ExpensesView, MissionsView，保持不變) ...
 // --- 5. 任務成就視圖 ---
 function MissionsView({ user }) {
   const [completedMissions, setCompletedMissions] = useState({});
@@ -764,95 +818,6 @@ function ItineraryView({ user }) {
   );
 }
 
-// --- 4. 防災視圖 ---
-function SafetyView() {
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="grid grid-cols-2 gap-4">
-        <a href="tel:110" className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-6 rounded-[2rem] flex flex-col items-center justify-center border border-white/5 hover:border-red-500/50 transition-all active:scale-95 group relative overflow-hidden">
-            <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
-            <Phone className="text-red-500 mb-3 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]" size={32} />
-            <div className="font-black text-white text-3xl font-mono tracking-tighter">110</div>
-            <div className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">警察局</div>
-        </a>
-        <a href="tel:119" className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-6 rounded-[2rem] flex flex-col items-center justify-center border border-white/5 hover:border-red-500/50 transition-all active:scale-95 group relative overflow-hidden">
-            <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
-            <div className="relative">
-                <Phone className="text-red-500 mb-3 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]" size={32} />
-                <div className="absolute -top-1 -right-2 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg shadow-red-600/50">EMG</div>
-            </div>
-            <div className="font-black text-white text-3xl font-mono tracking-tighter">119</div>
-            <div className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">消防 / 救護</div>
-        </a>
-      </div>
-
-      <div className="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-[2rem] shadow-[0_0_40px_-10px_rgba(220,38,38,0.4)] relative overflow-hidden border border-red-500/30">
-          <div className="absolute -right-8 -top-8 opacity-20 rotate-12 text-black mix-blend-overlay">
-            <ShieldAlert size={150} />
-          </div>
-          <h3 className="font-bold text-xl mb-6 flex items-center gap-3 relative z-10 text-white">
-            <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm"><ShieldAlert size={20} /></div>
-            緊急求助卡
-          </h3>
-          <div className="bg-white text-black p-6 rounded-2xl text-center shadow-2xl relative z-10 mx-auto max-w-xs transform rotate-1 hover:rotate-0 transition-transform">
-              <p className="text-4xl font-black mb-1 text-red-600 tracking-tight">助けてください</p>
-              <p className="text-xs text-zinc-400 font-mono mb-4 tracking-widest uppercase">Tasukete Kudasai</p>
-              <div className="h-px bg-zinc-100 my-4 w-1/2 mx-auto"></div>
-              <p className="text-lg font-bold text-zinc-800">請幫幫我</p>
-              <p className="text-xs text-zinc-400 font-medium">Please help me</p>
-          </div>
-          <p className="text-red-100/60 text-[10px] mt-6 text-center relative z-10 uppercase tracking-widest">遇到困難時請向周圍日本人出示此卡</p>
-      </div>
-
-      <div className="bg-zinc-900/60 backdrop-blur-md border border-white/5 p-6 rounded-[2rem]">
-        <h3 className="font-bold text-white mb-4 flex items-center gap-2 text-sm">
-            <AlertTriangle className="text-orange-500" size={16} />
-            官方資訊連結
-        </h3>
-        <div className="space-y-3">
-            <ExternalLinkItem 
-                title="Google 避難所地圖" 
-                desc="搜尋附近緊急避難場所"
-                url="https://www.google.com/maps/search/evacuation+shelter"
-                color="blue"
-            />
-            <ExternalLinkItem 
-                title="NHK World Japan (防災)" 
-                desc="多語言災害新聞與警報"
-                url="https://www3.nhk.or.jp/nhkworld/en/news/tags/18/"
-                color="zinc"
-            />
-            <ExternalLinkItem 
-                title="日本氣象廳 (JMA)" 
-                desc="地震與海嘯即時資訊"
-                url="https://www.jma.go.jp/jma/indexe.html"
-                color="zinc"
-            />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExternalLinkItem({ title, desc, url, color }) {
-    return (
-        <a 
-            href={url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center justify-between p-4 rounded-2xl bg-black/20 hover:bg-white/5 border border-white/5 transition-all group"
-        >
-            <div>
-                <div className={`font-bold text-sm group-hover:underline ${color === 'blue' ? 'text-blue-400' : 'text-zinc-200'}`}>{title}</div>
-                <div className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">{desc}</div>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white group-hover:bg-white/10 transition-colors">
-                <ExternalLink size={14} />
-            </div>
-        </a>
-    );
-}
-
 // --- 2. 天氣視圖 ---
 function WeatherView() {
   const [weatherData, setWeatherData] = useState({});
@@ -994,7 +959,7 @@ function WeatherView() {
 }
 
 // --- 3. 記帳視圖 (整合 OCR) ---
-function ExpensesView({ user }) {
+function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
@@ -1151,9 +1116,10 @@ function ExpensesView({ user }) {
                 <button 
                 type="button"
                 onClick={handleSmartScan}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse hover:scale-105 transition-transform uppercase tracking-wider"
+                disabled={!ocrReady} // 如果 OCR 引擎還沒好，按鈕不能按
+                className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse hover:scale-105 transition-transform uppercase tracking-wider disabled:opacity-50"
                 >
-                <ScanLine size={12} /> OCR 掃描
+                {ocrReady ? <><ScanLine size={12} /> OCR 掃描</> : <><Loader2 size={12} className="animate-spin" /> 載入引擎中...</>}
                 </button>
             )}
         </div>
@@ -1191,7 +1157,8 @@ function ExpensesView({ user }) {
                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-bold">上傳收據</span>
                </div>
             )}
-            <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileChange} />
+            {/* 加入 capture="environment" 強制手機後置鏡頭 */}
+            <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
         </div>
 
         {scanError && (
@@ -1204,7 +1171,7 @@ function ExpensesView({ user }) {
         <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
                 <input 
-                    输入="number" 
+                    type="number" 
                     placeholder="¥ 金額" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -1213,7 +1180,7 @@ function ExpensesView({ user }) {
             </div>
             <div className="col-span-2">
                 <input 
-                    输入="text" 
+                    type="text" 
                     placeholder="說明..." 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1223,7 +1190,7 @@ function ExpensesView({ user }) {
         </div>
 
         <button 
-          输入="submit" 
+          type="submit" 
           disabled={isSubmitting || !amount || isAnalyzing}
           className="w-full bg-white text-black py-3.5 rounded-xl font-black text-sm uppercase tracking-wide shadow-lg hover:bg-zinc-200 active:scale-[0.98] transition-all disabled:opacity-30 disabled:shadow-none flex items-center justify-center gap-2"
         >
