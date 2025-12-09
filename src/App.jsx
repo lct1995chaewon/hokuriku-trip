@@ -51,12 +51,10 @@ import {
   getDoc
 } from 'firebase/firestore';
 
-// --- API Key & Config ---
+// --- API Key 移除 ---
+// 改用 OCR，不需要 Gemini API Key
 
-// 1. 設定 Gemini API Key (已填入你提供的 Key)
-const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
-
-// 2. Firebase 設定
+// --- 2. Firebase 設定 ---
 let firebaseConfig;
 try {
   // 嘗試讀取環境變數 (預覽環境用)
@@ -131,8 +129,8 @@ const MISSIONS = [
   { id: 'winter_train', title: '鐵道旅情', desc: '搭乘新幹線或特色列車', location: '北陸', icon: '🚅' },
 ];
 
-// --- 輔助函式：圖片壓縮與處理 ---
-const processImageForAI = (file) => {
+// --- 輔助函式：圖片壓縮 (為了讓 OCR 跑快一點) ---
+const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -140,21 +138,20 @@ const processImageForAI = (file) => {
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
-        // 設定最大寬度或高度，避免圖片過大導致 API 拒絕
-        const MAX_WIDTH = 1024;
-        const MAX_HEIGHT = 1024;
+        // OCR 不需要太高解析度，限制在 1000px 左右可以大幅提升速度
+        const MAX_SIZE = 1000;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
           }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
           }
         }
 
@@ -163,15 +160,15 @@ const processImageForAI = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-
-        // 轉成 JPEG 格式，品質 0.7 進行壓縮
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        const base64 = dataUrl.split(',')[1];
-        resolve({ base64, mimeType: 'image/jpeg' });
+        
+        // 轉回 Blob 供 OCR 使用
+        canvas.toBlob((blob) => {
+            resolve(blob);
+        }, 'image/jpeg', 0.8);
       };
-      img.onerror = (error) => reject(error);
+      img.onerror = reject;
     };
-    reader.onerror = (error) => reject(error);
+    reader.onerror = reject;
   });
 };
 
@@ -206,6 +203,16 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('itinerary'); 
+
+  // 自動載入 Tesseract OCR 引擎 (CDN)
+  useEffect(() => {
+    if (!window.Tesseract) {
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+        script.async = true;
+        document.body.appendChild(script);
+    }
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -986,7 +993,7 @@ function WeatherView() {
   );
 }
 
-// --- 3. 記帳視圖 ---
+// --- 3. 記帳視圖 (整合 OCR) ---
 function ExpensesView({ user }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -1025,42 +1032,49 @@ function ExpensesView({ user }) {
   };
 
   const handleSmartScan = async () => {
-    if (!fileRef.current) return;
+    if (!imagePreview) return;
     setIsAnalyzing(true);
     setScanError(null);
 
     try {
-      const { base64 } = await processImageForAI(fileRef.current);
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: "Analyze this receipt image. Extract the total amount (number only) and a short description. If the description is in Japanese, translate it to Traditional Chinese (繁體中文). Return ONLY valid JSON format: {\"amount\": number, \"description\": \"string\"}. If uncertain, amount is 0." },
-              { inline_data: { mime_type: "image/jpeg", data: base64 } }
-            ]
-          }],
-          generationConfig: { responseMimeType: "application/json" }
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || response.statusText);
+      if (!window.Tesseract) {
+        throw new Error("OCR 引擎載入中，請稍後再試");
       }
 
-      const data = await response.json();
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        const result = JSON.parse(data.candidates[0].content.parts[0].text);
-        if (result.amount) setAmount(result.amount);
-        if (result.description) setDescription(result.description);
-      } else {
-        throw new Error("No response");
+      // 壓縮圖片再進行辨識
+      const compressedBlob = await compressImage(fileRef.current);
+      const compressedUrl = URL.createObjectURL(compressedBlob);
+
+      const { data: { text } } = await window.Tesseract.recognize(
+        compressedUrl,
+        'eng', // 使用英文/數字模式，速度較快且足夠辨識金額
+        { logger: m => console.log(m) }
+      );
+
+      console.log("OCR Result:", text);
+      
+      // 簡單的正規表達式抓取數字 (這只是基本範例，實際收據很複雜)
+      // 找尋像是 1,000 或 1000 的數字
+      const numbers = text.match(/(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?/g);
+      
+      if (numbers && numbers.length > 0) {
+         // 嘗試過濾並找出最大的數字作為金額
+         const validNumbers = numbers.map(n => parseFloat(n.replace(/,/g, ''))).filter(n => !isNaN(n));
+         const maxNum = validNumbers.sort((a,b)=>b-a)[0];
+         if (maxNum) setAmount(maxNum);
       }
+      
+      // 取前幾行當作說明
+      const lines = text.split('\n').filter(line => line.trim().length > 0);
+      if (lines.length > 0) {
+        // 過濾掉全數字行，找比較像文字的
+        const descLine = lines.find(l => !/^\d+$/.test(l.replace(/[,.]/g, ''))) || lines[0];
+        setDescription(descLine.substring(0, 20)); 
+      }
+
     } catch (error) {
-      console.error("AI Scan Error:", error);
-      setScanError(`分析失敗: ${error.message}`);
+      console.error(error);
+      setScanError("OCR 辨識失敗");
     } finally {
       setIsAnalyzing(false);
     }
@@ -1108,7 +1122,6 @@ function ExpensesView({ user }) {
         <div className="absolute -right-16 -bottom-16 text-emerald-500/10 group-hover:text-emerald-500/20 transition-colors duration-500">
             <CreditCard size={200} />
         </div>
-        {/* 使用 CSS 漸層替代外部圖片，避免 404 */}
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent bg-[length:20px_20px]"></div>
         
         <div className="relative z-10">
@@ -1140,7 +1153,7 @@ function ExpensesView({ user }) {
                 onClick={handleSmartScan}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse hover:scale-105 transition-transform uppercase tracking-wider"
                 >
-                <ScanLine size={12} /> AI 掃描
+                <ScanLine size={12} /> OCR 掃描
                 </button>
             )}
         </div>
@@ -1155,7 +1168,7 @@ function ExpensesView({ user }) {
             {isAnalyzing ? (
               <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-cyan-400 z-10 backdrop-blur-sm">
                 <Loader2 size={24} className="animate-spin mb-2" />
-                <span className="text-[10px] font-mono tracking-widest">分析中...</span>
+                <span className="text-[10px] font-mono tracking-widest">文字辨識中...</span>
               </div>
             ) : null}
 
@@ -1191,7 +1204,7 @@ function ExpensesView({ user }) {
         <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
                 <input 
-                    type="number" 
+                    输入="number" 
                     placeholder="¥ 金額" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -1200,7 +1213,7 @@ function ExpensesView({ user }) {
             </div>
             <div className="col-span-2">
                 <input 
-                    type="text" 
+                    输入="text" 
                     placeholder="說明..." 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1210,7 +1223,7 @@ function ExpensesView({ user }) {
         </div>
 
         <button 
-          type="submit" 
+          输入="submit" 
           disabled={isSubmitting || !amount || isAnalyzing}
           className="w-full bg-white text-black py-3.5 rounded-xl font-black text-sm uppercase tracking-wide shadow-lg hover:bg-zinc-200 active:scale-[0.98] transition-all disabled:opacity-30 disabled:shadow-none flex items-center justify-center gap-2"
         >
