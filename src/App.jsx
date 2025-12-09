@@ -53,20 +53,20 @@ import {
 
 // --- API Key & Config ---
 
-// 1. 設定 Gemini API Key
+// 1. 設定 Gemini API Key (已填入你提供的 Key)
 const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
 
 // 2. Firebase 設定
 let firebaseConfig;
 try {
-  // 嘗試讀取環境變數
+  // 嘗試讀取環境變數 (預覽環境用)
   if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = JSON.parse(__firebase_config);
   } else {
     throw new Error('Environment config not found');
   }
 } catch (e) {
-  // --- 您的個人 Firebase 設定 ---
+  // --- 請在這裡填入你自己的 Firebase 設定 (部署用) ---
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -132,7 +132,6 @@ const MISSIONS = [
 ];
 
 // --- 輔助函式：圖片壓縮與處理 ---
-// 這可以解決手機照片太大或格式(HEIC)不支援的問題
 const processImageForAI = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -141,7 +140,7 @@ const processImageForAI = (file) => {
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
-        // 設定最大寬度或高度，避免圖片過大
+        // 設定最大寬度或高度，避免圖片過大導致 API 拒絕
         const MAX_WIDTH = 1024;
         const MAX_HEIGHT = 1024;
         let width = img.width;
@@ -165,8 +164,8 @@ const processImageForAI = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 轉成 JPEG 格式，品質 0.8 (這會解決 HEIC 格式問題)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        // 轉成 JPEG 格式，品質 0.7 進行壓縮
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         const base64 = dataUrl.split(',')[1];
         resolve({ base64, mimeType: 'image/jpeg' });
       };
@@ -1032,7 +1031,7 @@ function ExpensesView({ user }) {
 
     try {
       const { base64 } = await processImageForAI(fileRef.current);
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1046,6 +1045,11 @@ function ExpensesView({ user }) {
         })
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || response.statusText);
+      }
+
       const data = await response.json();
       if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
         const result = JSON.parse(data.candidates[0].content.parts[0].text);
@@ -1055,7 +1059,8 @@ function ExpensesView({ user }) {
         throw new Error("No response");
       }
     } catch (error) {
-      setScanError("分析失敗，請手動輸入");
+      console.error("AI Scan Error:", error);
+      setScanError(`分析失敗: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -1177,8 +1182,8 @@ function ExpensesView({ user }) {
         </div>
 
         {scanError && (
-             <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3 py-2.5 rounded-xl flex items-center gap-2">
-                 <AlertTriangle size={14} />
+             <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3 py-2.5 rounded-xl flex items-center gap-2 break-all">
+                 <AlertTriangle size={14} className="flex-shrink-0" />
                  {scanError}
              </div>
         )}
