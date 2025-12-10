@@ -29,10 +29,9 @@ import {
   Loader2,
   Plane,
   ChevronRight,
-  TrainFront, // 交通
-  Languages, // 翻譯
-  LayoutGrid, // 工具選單
-  Megaphone // 發音(裝飾用)
+  Train, // 改用 Train 避免版本相容問題
+  Languages,
+  LayoutGrid
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -131,7 +130,6 @@ const MISSIONS = [
   { id: 'winter_train', title: '鐵道旅情', desc: '搭乘新幹線或特色列車', location: '北陸', icon: '🚅' },
 ];
 
-// 翻譯卡片資料
 const PHRASES = [
   { jp: '香箱ガニをください', romaji: 'Koubako-gani wo kudasai', zh: '請給我香箱蟹 (12月限定!)', icon: '🦀' },
   { jp: '氷見うどん', romaji: 'Himi Udon', zh: '冰見烏龍麵', icon: '🍜' },
@@ -266,7 +264,7 @@ export default function App() {
         )}
       </main>
 
-      {/* 2. 懸浮導航島 (Floating Dock) */}
+      {/* 底部導航島 */}
       <nav className="absolute bottom-6 left-4 right-4 h-16 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-full z-30 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
         <div className="grid grid-cols-5 h-full items-center justify-items-center relative">
             <TabButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} />
@@ -279,7 +277,6 @@ export default function App() {
             </div>
 
             <TabButton icon={<CreditCard size={20} />} label="記帳" active={activeTab === 'expenses'} onClick={() => setActiveTab('expenses')} />
-            {/* 改為工具箱 (Tools) */}
             <TabButton icon={<LayoutGrid size={20} />} label="工具" active={activeTab === 'tools'} onClick={() => setActiveTab('tools')} isAlert />
         </div>
       </nav>
@@ -307,11 +304,11 @@ function ToolsView() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 1. 交通運行看板 (Traffic Status Board) */}
+      {/* 交通看板 */}
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-lg relative">
         <div className="bg-black/50 p-3 border-b border-zinc-700 flex justify-between items-center backdrop-blur-sm">
             <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
-                <TrainFront size={16} className="text-green-400" /> JR 運行情報 (北陸)
+                <Train size={16} className="text-green-400" /> JR 運行情報 (北陸)
             </h3>
             <span className="text-[10px] text-zinc-500 font-mono animate-pulse">● LIVE</span>
         </div>
@@ -334,7 +331,7 @@ function ToolsView() {
         </a>
       </div>
 
-      {/* 2. 翻譯指差卡 (Phrasebook) */}
+      {/* 翻譯指差卡 */}
       <div>
         <h3 className="text-white font-bold mb-3 flex items-center gap-2">
             <Languages size={18} className="text-purple-400" /> 翻譯指差卡
@@ -354,7 +351,7 @@ function ToolsView() {
         </div>
       </div>
 
-      {/* 3. 防災安全 (Safety) - 濃縮版 */}
+      {/* 防災安全 */}
       <div className="bg-red-900/10 border border-red-500/20 p-5 rounded-3xl">
         <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2">
             <ShieldAlert size={18} /> 緊急求助
@@ -388,8 +385,8 @@ function ToolsView() {
   );
 }
 
-// ... (以下為其他視圖元件 ItineraryView, WeatherView, ExpensesView, MissionsView，保持不變) ...
-// --- 5. 任務成就視圖 ---
+// --- 其他視圖組件 ---
+
 function MissionsView({ user }) {
   const [completedMissions, setCompletedMissions] = useState({});
   const [activeMission, setActiveMission] = useState(null); 
@@ -506,7 +503,6 @@ function MissionsView({ user }) {
       {activeMission && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-zinc-900 border border-white/10 rounded-[2rem] w-full max-w-sm p-8 shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden">
-             {/* 裝飾背景 */}
              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none"></div>
              
              <div className="flex justify-between items-start mb-6 relative z-10">
@@ -559,7 +555,6 @@ function MissionsView({ user }) {
   );
 }
 
-// --- 1. 行程視圖 ---
 function ItineraryView({ user }) {
   const [plans, setPlans] = useState({});
   const [activities, setActivities] = useState({});
@@ -818,7 +813,6 @@ function ItineraryView({ user }) {
   );
 }
 
-// --- 2. 天氣視圖 ---
 function WeatherView() {
   const [weatherData, setWeatherData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -882,7 +876,6 @@ function WeatherView() {
 
   return (
     <div className="space-y-4">
-      {/* 3. 玻璃質感天氣小工具 (Glass Widgets) */}
       <div className="bg-gradient-to-br from-blue-600/20 to-indigo-900/40 border border-blue-500/20 text-white p-8 rounded-[2.5rem] shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)] relative overflow-hidden backdrop-blur-xl">
         <div className="absolute top-[-20%] right-[-10%] opacity-20 text-blue-300 rotate-12">
            <CloudSnow size={180} />
@@ -958,7 +951,6 @@ function WeatherView() {
   );
 }
 
-// --- 3. 記帳視圖 (整合 OCR) ---
 function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -1006,33 +998,27 @@ function ExpensesView({ user, ocrReady }) {
         throw new Error("OCR 引擎載入中，請稍後再試");
       }
 
-      // 壓縮圖片再進行辨識
       const compressedBlob = await compressImage(fileRef.current);
       const compressedUrl = URL.createObjectURL(compressedBlob);
 
       const { data: { text } } = await window.Tesseract.recognize(
         compressedUrl,
-        'eng', // 使用英文/數字模式，速度較快且足夠辨識金額
+        'eng', 
         { logger: m => console.log(m) }
       );
 
       console.log("OCR Result:", text);
       
-      // 簡單的正規表達式抓取數字 (這只是基本範例，實際收據很複雜)
-      // 找尋像是 1,000 或 1000 的數字
       const numbers = text.match(/(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?/g);
       
       if (numbers && numbers.length > 0) {
-         // 嘗試過濾並找出最大的數字作為金額
          const validNumbers = numbers.map(n => parseFloat(n.replace(/,/g, ''))).filter(n => !isNaN(n));
          const maxNum = validNumbers.sort((a,b)=>b-a)[0];
          if (maxNum) setAmount(maxNum);
       }
       
-      // 取前幾行當作說明
       const lines = text.split('\n').filter(line => line.trim().length > 0);
       if (lines.length > 0) {
-        // 過濾掉全數字行，找比較像文字的
         const descLine = lines.find(l => !/^\d+$/.test(l.replace(/[,.]/g, ''))) || lines[0];
         setDescription(descLine.substring(0, 20)); 
       }
@@ -1082,7 +1068,6 @@ function ExpensesView({ user, ocrReady }) {
 
   return (
     <div className="space-y-6">
-      {/* 4. 數位錢包風格卡片 (Wallet Card) */}
       <div className="bg-gradient-to-br from-emerald-900 to-teal-900 border border-emerald-500/20 p-8 rounded-[2rem] shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)] relative overflow-hidden group">
         <div className="absolute -right-16 -bottom-16 text-emerald-500/10 group-hover:text-emerald-500/20 transition-colors duration-500">
             <CreditCard size={200} />
@@ -1116,7 +1101,7 @@ function ExpensesView({ user, ocrReady }) {
                 <button 
                 type="button"
                 onClick={handleSmartScan}
-                disabled={!ocrReady} // 如果 OCR 引擎還沒好，按鈕不能按
+                disabled={!ocrReady} 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse hover:scale-105 transition-transform uppercase tracking-wider disabled:opacity-50"
                 >
                 {ocrReady ? <><ScanLine size={12} /> OCR 掃描</> : <><Loader2 size={12} className="animate-spin" /> 載入引擎中...</>}
@@ -1157,7 +1142,6 @@ function ExpensesView({ user, ocrReady }) {
                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-bold">上傳收據</span>
                </div>
             )}
-            {/* 加入 capture="environment" 強制手機後置鏡頭 */}
             <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
         </div>
 
@@ -1234,4 +1218,23 @@ function ExpensesView({ user, ocrReady }) {
       />
     </div>
   );
+}
+
+function ExternalLinkItem({ title, desc, url, color }) {
+    return (
+        <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-between p-4 rounded-2xl bg-black/20 hover:bg-white/5 border border-white/5 transition-all group"
+        >
+            <div>
+                <div className={`font-bold text-sm group-hover:underline ${color === 'blue' ? 'text-blue-400' : 'text-zinc-200'}`}>{title}</div>
+                <div className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">{desc}</div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white group-hover:bg-white/10 transition-colors">
+                <ExternalLink size={14} />
+            </div>
+        </a>
+    );
 }
