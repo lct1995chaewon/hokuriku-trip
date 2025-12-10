@@ -1,0 +1,17 @@
+{
+  "name": "北陸旅程小幫手",
+  "short_name": "北陸小幫手",
+  "description": "北陸冬季旅遊行程、天氣與記帳助手",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ]
+}
