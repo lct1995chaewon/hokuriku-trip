@@ -29,9 +29,13 @@ import {
   Loader2,
   Plane,
   ChevronRight,
-  Train, // 改用 Train 避免版本相容問題
+  Train, 
   Languages,
-  LayoutGrid
+  LayoutGrid,
+  Bed,
+  Coffee,
+  Mountain,
+  Utensils
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -82,32 +86,56 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-hokuriku-trip';
 
-// --- 輔助資料 ---
+// --- 輔助資料 (2025年版本) ---
 const DATES = [
-  "12/22 (日)", "12/23 (一)", "12/24 (二)", "12/25 (三)", 
-  "12/26 (四)", "12/27 (五)", "12/28 (六)", "12/29 (日)"
+  "12/22 (一)", "12/23 (二)", "12/24 (三)", "12/25 (四)", 
+  "12/26 (五)", "12/27 (六)", "12/28 (日)", "12/29 (一)"
 ];
 
-const DEFAULT_FLIGHTS = {
-  "day-0": [
-    {
-      id: "default-flight-outbound",
-      time: "14:30",
-      title: "✈️ HKG -> KMQ",
-      note: "抵達小松 19:00",
-      createdAt: 0,
-      isSystem: true
-    }
+// --- 預設詳細行程 ---
+const DEFAULT_ITINERARY = {
+  "day-0": [ // 12/22 (一)
+    { id: "d1-flight", time: "14:30", title: "✈️ UO802 HKG -> KMQ", note: "19:00 抵達小松", type: "flight", isSystem: true },
+    { id: "d1-bus", time: "19:40", title: "🚌 機場巴士 -> 金澤站", note: "往金澤站東口 (約40分)", type: "transport", isSystem: true },
+    { id: "d1-hotel", time: "20:30", title: "🏨 Garden Hotel Kanazawa", note: "金澤站東口步行1分鐘 / 記得寄行李!", type: "hotel", isSystem: true }
   ],
-  "day-7": [
-    {
-      id: "default-flight-inbound",
-      time: "19:45",
-      title: "✈️ KMQ -> HKG",
-      note: "抵達香港 23:35",
-      createdAt: 9999999999999,
-      isSystem: true
-    }
+  "day-1": [ // 12/23 (二)
+    { id: "d2-shinkansen", time: "07:19", title: "🚄 Hakutaka 554 -> 富山", note: "預約號: 44368 / 07:42著", type: "transport", isSystem: true },
+    { id: "d2-hida", time: "07:58", title: "🚆 Hida 6號 -> 高山", note: "8車 12-D / 預約號: 47964 / 09:28著", type: "transport", isSystem: true },
+    { id: "d2-bus-out", time: "10:40", title: "🚌 高山 -> 新穗高纜車", note: "買奧飛驒套票 / 12:16著", type: "transport", isSystem: true },
+    { id: "d2-ropeway", time: "12:30", title: "🏔️ 新穗高纜車", note: "2156m 山頂看雪 (停2.5hr)", type: "activity", isSystem: true },
+    { id: "d2-bus-back", time: "14:55", title: "🚌 新穗高 -> 高山", note: "16:31 抵達高山", type: "transport", isSystem: true },
+    { id: "d2-dinner", time: "18:00", title: "🥩 晚餐: 味藏天國", note: "飛驒牛燒肉", type: "food", isSystem: true },
+    { id: "d2-hotel", time: "20:00", title: "🏨 Hotel Around Takayama", note: "高山站步行 3-4 分鐘", type: "hotel", isSystem: true }
+  ],
+  "day-2": [ // 12/24 (三)
+    { id: "d3-morning", time: "09:00", title: "🍎 宮川朝市 / 高山陣屋", note: "雪中京都風情", type: "activity", isSystem: true },
+    { id: "d3-train", time: "13:17", title: "🚆 Hida -> 富山", note: "前往富山 Check-in", type: "transport", isSystem: true },
+    { id: "d3-starbucks", time: "17:00", title: "☕ 富山環水公園", note: "最美星巴克點燈", type: "activity", isSystem: true },
+    { id: "d3-hotel", time: "19:00", title: "🏨 Dormy Inn 富山", note: "訂單: 135904111464567 / 天然溫泉", type: "hotel", isSystem: true }
+  ],
+  "day-3": [ // 12/25 (四)
+    { id: "d4-city", time: "10:00", title: "🏛️ 富山市區", note: "玻璃美術館 / 富山城", type: "activity", isSystem: true },
+    { id: "d4-train", time: "13:30", title: "🚃 電鐵富山 -> 宇奈月", note: "14:45 抵達", type: "transport", isSystem: true },
+    { id: "d4-hotel", time: "15:00", title: "🏨 大江戶溫泉物語", note: "雪見露天風呂 / 晚餐Buffet", type: "hotel", isSystem: true }
+  ],
+  "day-4": [ // 12/26 (五)
+    { id: "d5-train", time: "18:30", title: "🚃 宇奈月 -> 富山", note: "電鐵末班車確認", type: "transport", isSystem: true },
+    { id: "d5-hotel", time: "20:00", title: "🏨 Dormy Inn 富山", note: "續住 / 泡湯", type: "hotel", isSystem: true }
+  ],
+  "day-5": [ // 12/27 (六)
+    { id: "d6-day", time: "10:00", title: "🌨️ 雨晴海岸 / 高岡", note: "哆啦A夢散步道 / 瑞龍寺", type: "activity", isSystem: true },
+    { id: "d6-hotel", time: "18:00", title: "🏨 Dormy Inn 富山", note: "大雪泡溫泉", type: "hotel", isSystem: true }
+  ],
+  "day-6": [ // 12/28 (日)
+    { id: "d7-checkout", time: "10:00", title: "Check-out -> 金澤", note: "新幹線 20 分鐘", type: "transport", isSystem: true },
+    { id: "d7-garden", time: "13:00", title: "🌲 兼六園", note: "專攻雪吊+積雪拍照", type: "activity", isSystem: true },
+    { id: "d7-hotel", time: "18:00", title: "🏨 Garden Hotel Kanazawa", note: "站前買手信", type: "hotel", isSystem: true }
+  ],
+  "day-7": [ // 12/29 (一)
+    { id: "d8-market", time: "10:00", title: "🦀 近江町市場", note: "最後採買", type: "food", isSystem: true },
+    { id: "d8-bus", time: "16:30", title: "🚌 金澤西口 -> 小松機場", note: "17:15 抵達", type: "transport", isSystem: true },
+    { id: "d8-flight", time: "19:45", title: "✈️ UO803 KMQ -> HKG", note: "23:35 抵達香港", type: "flight", isSystem: true }
   ]
 };
 
@@ -115,30 +143,30 @@ const CITIES = [
   { name: "金澤 (Kanazawa)", lat: 36.5613, lon: 136.6562 },
   { name: "富山 (Toyama)", lat: 36.6959, lon: 137.2137 },
   { name: "高岡 (Takaoka)", lat: 36.7550, lon: 137.0210 },
-  { name: "黑部/宇奈月 (Kurobe)", lat: 36.8145, lon: 137.5815 },
-  { name: "冰見 (Himi)", lat: 36.8546, lon: 136.9757 },
+  { name: "新穗高 (Shinhotaka)", lat: 36.2892, lon: 137.5756 },
+  { name: "宇奈月 (Unazuki)", lat: 36.8145, lon: 137.5815 },
 ];
 
 const MISSIONS = [
+  { id: 'shinhotaka_view', title: '2156m 絕景', desc: '在新穗高山頂展望台拍照', location: '新穗高', icon: '🏔️' },
+  { id: 'starbucks_light', title: '最美星巴克', desc: '拍下環水公園聖誕點燈', location: '富山', icon: '☕' },
+  { id: 'snow_onsen', title: '雪見風呂', desc: '在宇奈月露天溫泉賞雪', location: '宇奈月', icon: '♨️' },
+  { id: 'kenrokuen_snow', title: '兼六園雪吊', desc: '拍下被雪覆蓋的松樹', location: '金澤', icon: '🌲' },
+  { id: 'hida_beef', title: '飛驒牛燒肉', desc: '在味藏天國大吃一頓', location: '高山', icon: '🥩' },
   { id: 'kanazawa_gold', title: '金澤奢華', desc: '吃一支金箔雪糕', location: '金澤', icon: '🍦' },
-  { id: 'kenrokuen_snow', title: '兼六園之冬', desc: '拍下「雪吊」松樹', location: '金澤', icon: '🌲' },
-  { id: 'omicho_seafood', title: '市場大胃王', desc: '在近江町市場吃海鮮', location: '金澤', icon: '🦀' },
-  { id: 'toyama_black', title: '富山黑魂', desc: '挑戰富山黑拉麵', location: '富山', icon: '🍜' },
-  { id: 'takaoka_doraemon', title: '尋找哆啦A夢', desc: '與哆啦A夢角色銅像合照', location: '高岡', icon: '🐱' },
-  { id: 'himi_buri', title: '冰見王者', desc: '品嚐寒鰤魚(Buri)料理', location: '冰見', icon: '🐟' },
-  { id: 'unazuki_onsen', title: '峽谷暖意', desc: '在宇奈月溫泉泡湯/足湯', location: '宇奈月', icon: '♨️' },
-  { id: 'winter_train', title: '鐵道旅情', desc: '搭乘新幹線或特色列車', location: '北陸', icon: '🚅' },
+  { id: 'doraemon', title: '尋找哆啦A夢', desc: '與高岡銅像合照', location: '高岡', icon: '🐱' },
+  { id: 'crab', title: '香箱蟹', desc: '品嚐冬季限定香箱蟹', location: '北陸', icon: '🦀' },
 ];
 
 const PHRASES = [
-  { jp: '香箱ガニをください', romaji: 'Koubako-gani wo kudasai', zh: '請給我香箱蟹 (12月限定!)', icon: '🦀' },
-  { jp: '氷見うどん', romaji: 'Himi Udon', zh: '冰見烏龍麵', icon: '🍜' },
-  { jp: '白エビのかき揚げ', romaji: 'Shiro-ebi no Kakiage', zh: '白蝦天婦羅', icon: '🦐' },
-  { jp: 'ネギ抜きでお願いします', romaji: 'Negi nuki de onegaishimasu', zh: '請不要加蔥', icon: '🧅' },
+  { jp: '香箱ガニをください', romaji: 'Koubako-gani wo kudasai', zh: '請給我香箱蟹', icon: '🦀' },
+  { jp: '飛騨牛', romaji: 'Hida Gyu', zh: '飛驒牛', icon: '🥩' },
+  { jp: '雪見風呂', romaji: 'Yukimi Buro', zh: '我想泡雪見溫泉', icon: '♨️' },
+  { jp: '新穂高ロープウェイ', romaji: 'Shinhotaka Ropeway', zh: '新穗高纜車在哪?', icon: '🚡' },
   { jp: 'お会計をお願いします', romaji: 'O-kaikei wo onegaishimasu', zh: '麻煩結帳', icon: '💳' },
   { jp: '免税できますか？', romaji: 'Menzei dekimasu ka?', zh: '可以退稅嗎？', icon: '🛍️' },
-  { jp: 'トイレはどこですか？', romaji: 'Toire wa doko desu ka?', zh: '請問廁所在哪裡？', icon: '🚽' },
-  { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指著菜單)', icon: '👉' },
+  { jp: 'バス乗り場はどこ？', romaji: 'Basu noriba wa doko?', zh: '巴士站在哪裡？', icon: '🚌' },
+  { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
 // --- 輔助函式 ---
@@ -179,6 +207,18 @@ const compressImage = (file) => {
   });
 };
 
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = error => reject(error);
+  });
+};
+
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
@@ -192,6 +232,38 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
             </div>
         </div>
     </div>
+  );
+}
+
+function ExternalLinkItem({ title, desc, url, color }) {
+    return (
+        <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-between p-4 rounded-2xl bg-black/20 hover:bg-white/5 border border-white/5 transition-all group"
+        >
+            <div>
+                <div className={`font-bold text-sm group-hover:underline ${color === 'blue' ? 'text-blue-400' : 'text-zinc-200'}`}>{title}</div>
+                <div className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">{desc}</div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white group-hover:bg-white/10 transition-colors">
+                <ExternalLink size={14} />
+            </div>
+        </a>
+    );
+}
+
+function TabButton({ icon, label, active, onClick, isAlert }) {
+  let activeColor = isAlert ? 'text-orange-400' : 'text-cyan-400';
+  return (
+    <button onClick={onClick} className={`flex flex-col items-center justify-center space-y-1 transition-all duration-300 w-full h-full ${active ? `${activeColor} scale-110` : 'text-zinc-500 hover:text-zinc-300'}`}>
+      <div className="relative">
+        {icon}
+        {active && <span className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isAlert ? 'bg-orange-400' : 'bg-cyan-400'}`}></span>}
+      </div>
+      <span className="text-[10px] font-medium opacity-80">{label}</span>
+    </button>
   );
 }
 
@@ -239,10 +311,10 @@ export default function App() {
       {/* 頂部導航 */}
       <header className="bg-black/30 backdrop-blur-md pt-12 pb-4 px-6 sticky top-0 z-20 border-b border-white/5">
         <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2 drop-shadow-lg">
-          {activeTab === 'itinerary' && <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">北陸之旅 <span className="text-blue-400 font-mono text-lg">12/22-29</span></span>}
+          {activeTab === 'itinerary' && <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">北陸 2025 <span className="text-blue-400 font-mono text-lg">12/22</span></span>}
           {activeTab === 'weather' && <span className="bg-gradient-to-r from-blue-200 to-indigo-300 bg-clip-text text-transparent">天氣預報</span>}
           {activeTab === 'expenses' && <span className="bg-gradient-to-r from-emerald-200 to-teal-300 bg-clip-text text-transparent">消費記帳</span>}
-          {activeTab === 'tools' && <span className="bg-gradient-to-r from-orange-200 to-red-400 bg-clip-text text-transparent">旅途工具箱</span>}
+          {activeTab === 'tools' && <span className="bg-gradient-to-r from-orange-200 to-red-400 bg-clip-text text-transparent">旅途工具</span>}
           {activeTab === 'missions' && <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">成就挑戰</span>}
         </h1>
       </header>
@@ -264,7 +336,7 @@ export default function App() {
         )}
       </main>
 
-      {/* 底部導航島 */}
+      {/* 2. 懸浮導航島 (Floating Dock) */}
       <nav className="absolute bottom-6 left-4 right-4 h-16 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-full z-30 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
         <div className="grid grid-cols-5 h-full items-center justify-items-center relative">
             <TabButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} />
@@ -284,20 +356,8 @@ export default function App() {
   );
 }
 
-function TabButton({ icon, label, active, onClick, isAlert }) {
-  let activeColor = isAlert ? 'text-orange-400' : 'text-cyan-400';
-  return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center space-y-1 transition-all duration-300 w-full h-full ${active ? `${activeColor} scale-110` : 'text-zinc-500 hover:text-zinc-300'}`}>
-      <div className="relative">
-        {icon}
-        {active && <span className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isAlert ? 'bg-orange-400' : 'bg-cyan-400'}`}></span>}
-      </div>
-      <span className="text-[10px] font-medium opacity-80">{label}</span>
-    </button>
-  );
-}
+// --- Views ---
 
-// --- 4. 工具箱視圖 (整合 交通、翻譯、防災) ---
 function ToolsView() {
   const [activePhrase, setActivePhrase] = useState(null);
 
@@ -308,26 +368,35 @@ function ToolsView() {
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-lg relative">
         <div className="bg-black/50 p-3 border-b border-zinc-700 flex justify-between items-center backdrop-blur-sm">
             <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
-                <Train size={16} className="text-green-400" /> JR 運行情報 (北陸)
+                <Train size={16} className="text-green-400" /> 行程關鍵列車
             </h3>
-            <span className="text-[10px] text-zinc-500 font-mono animate-pulse">● LIVE</span>
+            <span className="text-[10px] text-zinc-500 font-mono animate-pulse">STATUS</span>
         </div>
         <div className="p-4 space-y-3 font-mono text-sm">
             <div className="flex justify-between items-center">
-                <span className="text-zinc-300">北陸新幹線</span>
-                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">正常運行</span>
+                <div className="flex flex-col">
+                    <span className="text-white font-bold">Hakutaka 554</span>
+                    <span className="text-xs text-zinc-500">金澤 -> 富山</span>
+                </div>
+                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded text-xs">正常運行</span>
             </div>
             <div className="flex justify-between items-center">
-                <span className="text-zinc-300">特急雷鳥號</span>
-                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">正常運行</span>
+                <div className="flex flex-col">
+                    <span className="text-white font-bold">Hida 6</span>
+                    <span className="text-xs text-zinc-500">富山 -> 高山</span>
+                </div>
+                <span className="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded text-xs">正常運行</span>
             </div>
-            <div className="flex justify-between items-center">
-                <span className="text-zinc-300">濃飛巴士</span>
-                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded">注意雪況</span>
+            <div className="flex justify-between items-center border-t border-white/5 pt-2 mt-1">
+                <div className="flex flex-col">
+                    <span className="text-zinc-300">濃飛巴士</span>
+                    <span className="text-xs text-zinc-500">奧飛驒線</span>
+                </div>
+                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded text-xs">注意雪況</span>
             </div>
         </div>
         <a href="https://trafficinfo.westjr.co.jp/hokuriku.html" target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-zinc-800/50 py-2 text-xs text-blue-400 hover:bg-zinc-800 transition-colors border-t border-zinc-700">
-            查看 JR 西日本官方詳情 →
+            JR 西日本運行情報 →
         </a>
       </div>
 
@@ -384,8 +453,6 @@ function ToolsView() {
     </div>
   );
 }
-
-// --- 其他視圖組件 ---
 
 function MissionsView({ user }) {
   const [completedMissions, setCompletedMissions] = useState({});
@@ -503,6 +570,7 @@ function MissionsView({ user }) {
       {activeMission && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-zinc-900 border border-white/10 rounded-[2rem] w-full max-w-sm p-8 shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+             {/* 裝飾背景 */}
              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none"></div>
              
              <div className="flex justify-between items-start mb-6 relative z-10">
@@ -578,9 +646,9 @@ function ItineraryView({ user }) {
         itemsData[doc.id] = d.items || [];
       });
 
-      Object.keys(DEFAULT_FLIGHTS).forEach(key => {
-        if (!itemsData[key]) {
-           itemsData[key] = DEFAULT_FLIGHTS[key];
+      Object.keys(DEFAULT_ITINERARY).forEach(key => {
+        if (!itemsData[key] || itemsData[key].length === 0) {
+           itemsData[key] = DEFAULT_ITINERARY[key];
         }
       });
 
@@ -599,7 +667,8 @@ function ItineraryView({ user }) {
       time: newTime || '待定',
       title: newTitle,
       note: newNote,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      type: 'activity'
     };
     const newItems = [...currentItems, newItem];
     newItems.sort((a, b) => a.time.localeCompare(b.time));
@@ -629,13 +698,22 @@ function ItineraryView({ user }) {
     return (activities[docId] && activities[docId].length > 0) || (plans[docId] && plans[docId].length > 0);
   };
 
+  const getItemStyle = (type) => {
+    switch(type) {
+        case 'flight': return { color: 'amber-400', bg: 'amber-500/10', border: 'amber-500/30', icon: <Plane size={12} className="text-amber-400"/> };
+        case 'transport': return { color: 'blue-400', bg: 'blue-500/10', border: 'blue-500/30', icon: <Train size={12} className="text-blue-400"/> };
+        case 'hotel': return { color: 'purple-400', bg: 'purple-500/10', border: 'purple-500/30', icon: <Bed size={12} className="text-purple-400"/> };
+        case 'food': return { color: 'red-400', bg: 'red-500/10', border: 'red-500/30', icon: <Utensils size={12} className="text-red-400"/> };
+        default: return { color: 'cyan-400', bg: 'zinc-800/40', border: 'white/10', icon: null };
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="grid grid-cols-4 gap-2 mb-6 px-1">
         {DATES.map((dateStr, index) => {
           const [date, weekDay] = dateStr.split(' ');
           const isActive = activeDay === index;
-          const hasActivity = hasItems(index);
           
           return (
             <button
@@ -648,9 +726,6 @@ function ItineraryView({ user }) {
             >
               <span className={`text-[9px] font-black uppercase tracking-widest leading-none mb-1.5 ${isActive ? 'text-zinc-900/60' : 'text-zinc-600'}`}>DAY {index + 1}</span>
               <span className="text-sm font-bold leading-none">{date}</span>
-              {hasActivity && (
-                <div className={`absolute bottom-2 w-1 h-1 rounded-full ${isActive ? 'bg-blue-500' : 'bg-zinc-600'}`}></div>
-              )}
             </button>
           )
         })}
@@ -671,62 +746,43 @@ function ItineraryView({ user }) {
             </button>
           </div>
 
-          {dayActivities.length === 0 && !legacyContent && (
-             <div className="flex flex-col items-center justify-center py-20 opacity-30">
-                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                    <Clock size={32} />
-                </div>
-                <p className="text-sm font-bold">尚未安排行程</p>
-                <p className="text-xs">點擊 + 新增活動</p>
-             </div>
-          )}
-
           <div className="space-y-6 relative pl-3">
             {dayActivities.length > 0 && (
                 <div className="absolute left-[31px] top-4 bottom-4 w-[2px] bg-gradient-to-b from-transparent via-zinc-800 to-transparent"></div>
             )}
 
-            {dayActivities.map((item) => (
-              <div key={item.id} className="relative flex gap-5 items-start group">
-                <div className={`z-10 w-3 h-3 rounded-full mt-2.5 flex-shrink-0 ring-4 ring-black 
-                    ${item.title.includes('✈️') 
-                        ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]' 
-                        : 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse'}`}>
-                </div>
-                
-                <div className={`flex-1 rounded-2xl p-4 transition-all relative border group-hover:-translate-y-1 duration-300
-                    ${item.title.includes('✈️') 
-                        ? 'bg-gradient-to-br from-amber-500/10 to-transparent border-amber-500/20' 
-                        : 'bg-zinc-800/40 border-white/5 hover:bg-zinc-800/60'}`}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-bold tracking-wide
-                                    ${item.title.includes('✈️') 
-                                        ? 'bg-amber-500/20 text-amber-300' 
-                                        : 'bg-blue-500/20 text-blue-300'}`}>
-                                    {item.time}
-                                </span>
-                                {item.title.includes('✈️') && <Plane size={12} className="text-amber-400" />}
-                            </div>
-                            <div className={`font-bold text-lg mb-1 ${item.title.includes('✈️') ? 'text-amber-100' : 'text-white'}`}>{item.title}</div>
-                            {item.note && (
-                                <div className="flex items-start gap-1.5 text-zinc-400 text-xs">
-                                    <MapPin size={12} className="mt-0.5 opacity-50" />
-                                    {item.note}
+            {dayActivities.map((item) => {
+              const style = getItemStyle(item.type);
+              return (
+                <div key={item.id} className="relative flex gap-5 items-start group">
+                    <div className={`z-10 w-3 h-3 rounded-full mt-2.5 flex-shrink-0 ring-4 ring-black bg-${style.color} shadow-[0_0_10px_rgba(255,255,255,0.3)]`}></div>
+                    
+                    <div className={`flex-1 rounded-2xl p-4 transition-all relative border group-hover:-translate-y-1 duration-300 bg-${style.bg} border-${style.border} hover:bg-zinc-800/60`}>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-[10px] font-mono font-bold text-zinc-400">{item.time}</span>
+                                    {style.icon}
                                 </div>
-                            )}
+                                <div className={`font-bold text-lg mb-1 text-white`}>{item.title}</div>
+                                {item.note && (
+                                    <div className="flex items-start gap-1.5 text-zinc-400 text-xs">
+                                        <MapPin size={12} className="mt-0.5 opacity-50" />
+                                        {item.note}
+                                    </div>
+                                )}
+                            </div>
+                            <button 
+                                onClick={() => setDeleteTargetId(item.id)}
+                                className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-2"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
-                        <button 
-                            onClick={() => setDeleteTargetId(item.id)}
-                            className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-2"
-                        >
-                            <Trash2 size={16} />
-                        </button>
                     </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {legacyContent && (
@@ -1007,8 +1063,6 @@ function ExpensesView({ user, ocrReady }) {
         { logger: m => console.log(m) }
       );
 
-      console.log("OCR Result:", text);
-      
       const numbers = text.match(/(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?/g);
       
       if (numbers && numbers.length > 0) {
@@ -1218,23 +1272,4 @@ function ExpensesView({ user, ocrReady }) {
       />
     </div>
   );
-}
-
-function ExternalLinkItem({ title, desc, url, color }) {
-    return (
-        <a 
-            href={url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center justify-between p-4 rounded-2xl bg-black/20 hover:bg-white/5 border border-white/5 transition-all group"
-        >
-            <div>
-                <div className={`font-bold text-sm group-hover:underline ${color === 'blue' ? 'text-blue-400' : 'text-zinc-200'}`}>{title}</div>
-                <div className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">{desc}</div>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white group-hover:bg-white/10 transition-colors">
-                <ExternalLink size={14} />
-            </div>
-        </a>
-    );
 }
