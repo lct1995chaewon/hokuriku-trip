@@ -716,4 +716,3 @@ function ItineraryView({ user }) {
         </div>
     );
 }
-}
