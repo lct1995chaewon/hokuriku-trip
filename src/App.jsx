@@ -532,5 +532,3 @@ function MissionsView({ user }) {
     // ... (Reuse Missions logic)
     return <div className="text-center text-zinc-500 py-10">成就功能區 (請填入邏輯)</div>;
 }
-
-} // End of App
