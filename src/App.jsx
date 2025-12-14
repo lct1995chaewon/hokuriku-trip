@@ -18,14 +18,13 @@ try {
     throw new Error('Environment config not found');
   }
 } catch (e) {
-  // 修正：這裡的所有逗號都已改為半形 ","
   firebaseConfig = {
-    apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4"，
-    authDomain: "hokuriku-trip.firebaseapp.com"，
-    projectId: "hokuriku-trip"，
-    storageBucket: "hokuriku-trip.firebasestorage.app"，
-    messagingSenderId: "170805929872"，
-    appId: "1:170805929872:web:ade0f3cc9f27ad7a84f515"，
+    apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
+    SyBp8BT3jN: "hokuriku-trip.firebaseapp.com",
+    projectId: "hokuriku-trip",
+    storageBucke : "hokuriku-trip.firebasestorage.app",
+    messagingSenderId: "170805929872",
+    appId: "1:170805929872:web:ade0f3cc9f27ad7a84f515",
     measurementId: "G-4Q500J33FZ"
   };
 }
@@ -893,3 +892,4 @@ function MemoirPreview({ items, onClose }) {
         </div>
     );
 }
+
