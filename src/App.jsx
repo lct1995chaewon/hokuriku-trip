@@ -1,21 +1,3 @@
-這是完整的 `App.jsx` 程式碼更新。
-
-主要修改內容：
-
-1. **`AssistantView`**：將 `WeatherView` 加入顯示列表。
-2. **`WeatherView`**：
-* API 請求新增 `precipitation_probability_max` (降水機率) 與 `snowfall_sum` (降雪量)。
-* UI 新增下雪特效與積雪量顯示。
-
-
-3. **`MissionsView`**：
-* 移除單純的勾選功能。
-* 新增 `handleFileChange` 處理拍照/上傳。
-* 介面改為：未完成顯示相機按鈕 -> 拍照 -> 上傳 -> 顯示照片與 "MISSION COMPLETED" 浮水印。
-
-
-
-```jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share
@@ -37,12 +19,12 @@ try {
   }
 } catch (e) {
   firebaseConfig = {
-    apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
-    authDomain: "hokuriku-trip.firebaseapp.com",
-    projectId: "hokuriku-trip",
-    storageBucket: "hokuriku-trip.firebasestorage.app",
-    messagingSenderId: "170805929872",
-    appId: "1:170805929872:web:ade0f3cc9f27ad7a84f515",
+    apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4"，
+    authDomain: "hokuriku-trip.firebaseapp.com"，
+    projectId: "hokuriku-trip"，
+    storageBucket: "hokuriku-trip.firebasestorage.app"，
+    messagingSenderId: "170805929872"，
+    appId: "1:170805929872:web:ade0f3cc9f27ad7a84f515"，
     measurementId: "G-4Q500J33FZ"
   };
 }
@@ -54,14 +36,14 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-hokuriku-trip';
 
 // --- 資料常數 ---
 const DATES = [
-  "12/22 (一)", "12/23 (二)", "12/24 (三)", "12/25 (四)", 
+  "12/22 (一)", "12/23 (二)", "12/24 (三)", "12/25 (四)"， 
   "12/26 (五)", "12/27 (六)", "12/28 (日)", "12/29 (一)"
 ];
 
 const DEFAULT_ITINERARY = {
   "day-0": [
-    { id: "d1-flight", time: "14:30", title: "✈️ UO802 HKG -> KMQ", note: "19:00 抵達小松", type: "flight", isSystem: true },
-    { id: "d1-bus", time: "19:40", title: "🚌 機場巴士 -> 金澤站", note: "往金澤站東口 (約40分)", type: "transport", isSystem: true },
+    { id: "d1-flight", time: "14:30", title: "✈️ UO802 HKG -> KMQ", note: "19:00 抵達小松", type: "flight"， isSystem: true },
+    { id: "d1-bus", time: "19:40", title: "🚌 機場巴士 -> 金澤站", note: "往金澤站東口 (約40分)", type: "transport"， isSystem: true },
     { id: "d1-hotel", time: "20:30", title: "🏨 Garden Hotel Kanazawa", note: "金澤站東口步行1分鐘", type: "hotel", isSystem: true }
   ],
   "day-1": [
@@ -912,3 +894,4 @@ function MemoirPreview({ items, onClose }) {
 }
 
 ```
+
