@@ -110,19 +110,20 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- [關鍵修正] 針對 iPhone 優化的圖片壓縮函式 ---
+// --- [關鍵修正] 智能圖片壓縮函式 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    // 修正點：使用 createObjectURL 避免 iPhone 讀取大檔時記憶體溢出
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.src = objectUrl;
     
     img.onload = () => {
-      const MAX_SIZE = 800; // 限制最大邊長
+      // 1. 設定初始最大尺寸 (比之前大，畫質較好)
+      const MAX_SIZE = 1024; 
       let width = img.width;
       let height = img.height;
       
+      // 保持比例調整尺寸
       if (width > height) {
         if (width > MAX_SIZE) {
           height *= MAX_SIZE / width;
@@ -141,14 +142,31 @@ const compressImage = (file) => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
       
+      // 2. 第一次嘗試壓縮 (品質 0.6)
       canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl); // 釋放記憶體
-        if(blob) {
-            resolve(blob);
+        URL.revokeObjectURL(objectUrl);
+        
+        if (blob) {
+            // 3. 檢查檔案大小，如果超過 900KB (接近 Firebase 1MB 限制)，強制再縮小
+            if (blob.size > 900 * 1024) {
+                 const newQuality = 0.5; // 降低品質
+                 const newCanvas = document.createElement('canvas');
+                 const scaleFactor = 0.8; // 再縮小 20%
+                 newCanvas.width = width * scaleFactor;
+                 newCanvas.height = height * scaleFactor;
+                 const newCtx = newCanvas.getContext('2d');
+                 newCtx.drawImage(img, 0, 0, newCanvas.width, newCanvas.height);
+                 
+                 newCanvas.toBlob((newBlob) => {
+                     resolve(newBlob); // 回傳較小的圖
+                 }, 'image/jpeg', newQuality);
+            } else {
+                resolve(blob);
+            }
         } else {
-            reject(new Error("Canvas to Blob failed"));
+            reject(new Error("圖片處理失敗"));
         }
-      }, 'image/jpeg', 0.7); // 70% 品質
+      }, 'image/jpeg', 0.6); 
     };
     
     img.onerror = (e) => {
@@ -179,7 +197,6 @@ const blobToBase64 = (blob) => {
   });
 };
 
-// 載入外部 Script 的輔助函式 (用於 html2canvas 和 jspdf)
 const loadScript = (src) => {
     return new Promise((resolve, reject) => {
         if (document.querySelector(`script[src="${src}"]`)) {
@@ -194,7 +211,6 @@ const loadScript = (src) => {
     });
 };
 
-// --- CSS Animation Injector for Snow ---
 const SnowStyle = () => (
     <style>{`
       @keyframes snowfall {
@@ -219,7 +235,7 @@ const SnowOverlay = () => {
     const flakes = Array.from({ length: 20 }).map((_, i) => ({
         id: i,
         left: Math.random() * 100 + 'vw',
-        animationDuration: (Math.random() * 5 + 5) + 's', // 5-10s
+        animationDuration: (Math.random() * 5 + 5) + 's',
         animationDelay: (Math.random() * 5) + 's',
         opacity: Math.random() * 0.5 + 0.3,
         size: Math.random() * 10 + 5 + 'px'
@@ -241,15 +257,12 @@ const SnowOverlay = () => {
     );
 };
 
-// --- 共用組件 ---
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-in fade-in duration-200">
       <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl scale-100 animate-in zoom-in-95 ring-1 ring-white/10 relative overflow-hidden">
-        {/* 聖誕裝飾背景 */}
         <div className="absolute top-0 right-0 p-4 opacity-10"><Gift size={60} /></div>
-        
         <h3 className="font-bold text-white text-lg mb-2 relative z-10">{title}</h3>
         <p className="text-zinc-400 text-sm mb-6 leading-relaxed relative z-10">{message}</p>
         <div className="flex gap-3 relative z-10">
@@ -284,7 +297,6 @@ function ExternalLinkItem({ title, desc, url, color }) {
     );
 }
 
-// --- 主程式 App ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('itinerary'); 
@@ -311,17 +323,11 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-black text-gray-100 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-zinc-800">
-      
-      {/* 全局飄雪特效 */}
       <SnowOverlay />
-
-      {/* 聖誕主題背景 (紅/綠/金氛圍) */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full bg-rose-900/20 blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] rounded-full bg-emerald-900/20 blur-[100px]"></div>
       </div>
-
-      {/* 頂部 Header */}
       <header className="bg-black/60 backdrop-blur-xl pt-12 pb-4 px-6 sticky top-0 z-20 border-b border-white/5 relative">
         <div className="flex justify-between items-center">
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 drop-shadow-xl">
@@ -330,14 +336,11 @@ export default function App() {
             {activeTab === 'wallet' && <><CreditCard className="text-amber-400" /> 消費記帳</>}
             {activeTab === 'memories' && <><BookOpen className="text-sky-400" /> 回憶圖鑑</>}
             </h1>
-            {/* 聖誕裝飾 Icon */}
             <div className="animate-bounce duration-[2000ms]">
                 <TreePine size={24} className="text-emerald-500 fill-emerald-500/20" />
             </div>
         </div>
       </header>
-
-      {/* 主要內容 */}
       <main className="flex-1 overflow-y-auto p-4 pb-32 scroll-smooth scrollbar-hide z-10 relative">
         {!user ? (
           <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-zinc-600" /></div>
@@ -350,8 +353,6 @@ export default function App() {
           </>
         )}
       </main>
-
-      {/* 底部懸浮導航 (毛玻璃特效加強) */}
       <nav className="absolute bottom-8 left-4 right-4 h-16 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-full z-30 shadow-2xl flex justify-around items-center px-2">
         <NavButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} color="text-red-400" />
         <NavButton icon={<LayoutGrid size={20} />} label="助手" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} color="text-emerald-400" />
@@ -362,9 +363,6 @@ export default function App() {
   );
 }
 
-// --- Views 實作 ---
-
-// 1. 行程視圖 (加入 12/25 聖誕特別標示)
 function ItineraryView({ user }) {
   const [plans, setPlans] = useState({});
   const [items, setItems] = useState([]);
@@ -383,7 +381,6 @@ function ItineraryView({ user }) {
       snapshot.forEach(doc => {
         data[doc.id] = doc.data().items || [];
       });
-      // Merge defaults
       Object.keys(DEFAULT_ITINERARY).forEach(key => {
         if (!data[key]) data[key] = DEFAULT_ITINERARY[key];
       });
@@ -418,7 +415,6 @@ function ItineraryView({ user }) {
     }
   };
 
-  // 判斷是否為聖誕節 (Day 3 -> 12/25)
   const isChristmas = DATES[activeDay].includes("12/25");
 
   return (
@@ -434,10 +430,8 @@ function ItineraryView({ user }) {
         })}
       </div>
       
-      {/* 行程列表容器 */}
       <div className={`bg-zinc-900/50 p-6 rounded-3xl min-h-[400px] relative overflow-hidden ${isChristmas ? 'border border-red-500/20' : ''}`}>
         
-        {/* 聖誕節背景裝飾 */}
         {isChristmas && (
             <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                 <Gift size={120} className="text-red-500" />
@@ -476,7 +470,6 @@ function ItineraryView({ user }) {
       </div>
       <ConfirmModal isOpen={!!deleteTargetId} onClose={()=>setDeleteTargetId(null)} onConfirm={confirmDeleteActivity} title="移除行程？" message="確定要刪除嗎？" />
       
-      {/* 新增行程 Modal */}
       {isAdding && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-[80]">
             <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-3xl border border-white/10 relative overflow-hidden">
@@ -496,7 +489,6 @@ function ItineraryView({ user }) {
   );
 }
 
-// 2. 助手視圖
 function AssistantView() {
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -569,7 +561,6 @@ function SafetyCard() {
     );
 }
 
-// 3. 天氣視圖
 function WeatherView() {
     const [weather, setWeather] = useState({});
     
@@ -580,7 +571,6 @@ function WeatherView() {
             
             for(const city of CITIES) {
                 try {
-                    // 請求 API 包含 precipitation_probability_max 和 snowfall_sum
                     const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,snowfall_sum&timezone=Asia%2FTokyo&start_date=${today}&end_date=${today}`);
                     const d = await res.json();
                     
@@ -588,8 +578,8 @@ function WeatherView() {
                         dataMap[city.name] = { 
                             max: Math.round(d.daily.temperature_2m_max[0]), 
                             min: Math.round(d.daily.temperature_2m_min[0]),
-                            pop: d.daily.precipitation_probability_max[0], // 降水機率
-                            snow: d.daily.snowfall_sum[0], // 降雪量
+                            pop: d.daily.precipitation_probability_max[0],
+                            snow: d.daily.snowfall_sum[0],
                             code: d.daily.weather_code[0]
                         };
                     }
@@ -643,7 +633,6 @@ function WeatherView() {
     );
 }
 
-// 4. 記帳視圖 (配色微調)
 function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -738,7 +727,6 @@ function ExpensesView({ user, ocrReady }) {
   );
 }
 
-// 5. 回憶視圖 (採集、日記、成就)
 function MemoriesView({ user }) {
   const [subTab, setSubTab] = useState('collection'); 
   return (
@@ -757,11 +745,10 @@ function MemoriesView({ user }) {
   );
 }
 
-// 修正後的 CollectionView：加入 loading 狀態與錯誤處理
 function CollectionView({ user }) {
   const [items, setItems] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // 新增處理狀態
+  const [isProcessing, setIsProcessing] = useState(false);
   const [newImage, setNewImage] = useState(null);
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
@@ -781,7 +768,7 @@ function CollectionView({ user }) {
   const handleCapture = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      setIsProcessing(true); // 開始顯示 loading
+      setIsProcessing(true);
       try {
         const compressed = await compressImage(file);
         const base64 = await blobToBase64(compressed);
@@ -790,12 +777,11 @@ function CollectionView({ user }) {
         setIsSticker(false); 
       } catch (error) {
         console.error("Image processing error:", error);
-        alert("圖片處理失敗，請試試看比較小的照片");
+        alert("圖片處理失敗，請重試");
       } finally {
-        setIsProcessing(false); // 結束 loading
+        setIsProcessing(false);
       }
     }
-    // 確保可以重複選同一張
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -807,10 +793,14 @@ function CollectionView({ user }) {
 
   const saveItem = async () => {
     if (!newImage || !title) return;
-    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), {
-      image: newImage, title, tag, isSticker, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW')
-    });
-    setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), {
+          image: newImage, title, tag, isSticker, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW')
+        });
+        setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
+    } catch(e) {
+        alert("存檔失敗 (可能是圖片依然過大，請多試幾次)");
+    }
   };
 
   const deleteItem = async (id) => {
@@ -829,10 +819,8 @@ function CollectionView({ user }) {
         <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       
-      {/* 修正 input 屬性以相容 iPhone */}
       <input type="file" ref={fileInputRef} accept="image/*" multiple={false} style={{display:'none'}} onChange={handleCapture} />
       
-      {/* 3欄緊湊佈局 */}
       <div className="grid grid-cols-3 gap-1.5">
         {items.map(item => (
             <div key={item.id} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden'}`}>
@@ -888,7 +876,6 @@ function CollectionView({ user }) {
   );
 }
 
-// 修正後的 MemoirPreview：固定按鈕 + 雙欄瀑布流
 function MemoirPreview({ items, onClose }) {
     const [isExporting, setIsExporting] = useState(false);
     const contentRef = useRef(null);
@@ -1013,7 +1000,6 @@ function DiaryView({ user }) {
   );
 }
 
-// 6. 任務視圖
 function MissionsView({ user }) {
   const [missionData, setMissionData] = useState({});
   const [activeMissionId, setActiveMissionId] = useState(null);
