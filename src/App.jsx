@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Image
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -167,6 +167,21 @@ const blobToBase64 = (blob) => {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+};
+
+// 載入外部 Script 的輔助函式 (用於 html2canvas 和 jspdf)
+const loadScript = (src) => {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            resolve();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+    });
 };
 
 // --- CSS Animation Injector for Snow ---
@@ -852,12 +867,82 @@ function CollectionView({ user }) {
   );
 }
 
-// 修正後的 MemoirPreview (固定按鈕 + 底部按鈕)
+// 修正後的 MemoirPreview (固定按鈕 + 底部按鈕 + 下載 PDF/JPG 功能)
 function MemoirPreview({ items, onClose }) {
+    const [isExporting, setIsExporting] = useState(false);
+    const contentRef = useRef(null);
+
+    const handleExport = async (type) => {
+        setIsExporting(true);
+        try {
+            // 動態載入 html2canvas 和 jsPDF (保持單一檔案優勢，不需 npm install)
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+            
+            const element = contentRef.current;
+            if (!element) return;
+
+            // 1. 產生 Canvas
+            // scale: 2 確保圖片清晰
+            const canvas = await window.html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            if (type === 'jpg') {
+                // 2a. 下載 JPG
+                const link = document.createElement('a');
+                link.download = `Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            } else if (type === 'pdf') {
+                // 2b. 下載 PDF
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+                const { jsPDF } = window.jspdf;
+                
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                const pdf = new jsPDF({
+                    orientation: 'p',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+                const widthInPdf = pdfWidth;
+                const heightInPdf = widthInPdf / ratio;
+
+                // 如果內容很長，可能會被切斷，這裡做簡單的單頁縮放 (長圖風格)
+                // 若要分頁會更複雜，目前以產生單張長 PDF 為主 (A4 寬度，高度自適應)
+                if (heightInPdf > pdfHeight) {
+                    // 如果長度超過 A4，建立自訂長度的 PDF
+                    const longPdf = new jsPDF({
+                        orientation: 'p',
+                        unit: 'mm',
+                        format: [pdfWidth, heightInPdf]
+                    });
+                    longPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
+                    longPdf.save(`Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.pdf`);
+                } else {
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
+                    pdf.save(`Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.pdf`);
+                }
+            }
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("匯出失敗，請重試");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black z-[90] overflow-y-auto animate-in slide-in-from-bottom">
             
-            {/* 1. 改為懸浮固定按鈕：永遠停留在右上角，不會隨頁面捲動消失 */}
+            {/* 懸浮固定關閉按鈕 */}
             <button 
                 onClick={onClose} 
                 className="fixed top-4 right-4 z-[100] bg-black/80 text-white p-3 rounded-full shadow-2xl border border-white/20 backdrop-blur-md active:scale-90 transition-transform"
@@ -865,8 +950,8 @@ function MemoirPreview({ items, onClose }) {
                 <X size={24}/>
             </button>
 
-            {/* 內容區域：增加 padding-top 避免內容被按鈕遮住 */}
-            <div className="min-h-screen w-full md:max-w-md md:mx-auto bg-white text-black md:rounded-3xl p-6 pt-20 md:p-8 md:pt-8 md:my-8 relative shadow-2xl">
+            {/* 內容區域 - 使用 ref 標記需要截圖的範圍 */}
+            <div ref={contentRef} className="min-h-screen w-full md:max-w-md md:mx-auto bg-white text-black md:rounded-3xl p-6 pt-20 md:p-8 md:pt-8 md:my-8 relative shadow-2xl" id="memoir-content">
                 
                 <div className="flex justify-between items-start mb-2">
                     <h1 className="text-4xl font-black tracking-tighter">COLLECTION</h1>
@@ -901,12 +986,28 @@ function MemoirPreview({ items, onClose }) {
                 <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono mb-8">
                     HOKURIKU TRIP MEMORY
                 </div>
-
-                {/* 2. 底部增加一個返回按鈕，雙重保險 */}
-                <button onClick={onClose} className="w-full py-4 bg-gray-100 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">
-                    返回上一頁
-                </button>
             </div>
+
+            {/* 底部操作區 (截圖時會被忽略，因為它在 ref 之外) */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black to-transparent z-[100] flex gap-3 justify-center md:max-w-md md:mx-auto">
+                 {isExporting ? (
+                     <div className="bg-black/80 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md">
+                         <Loader2 className="animate-spin" size={20}/> 輸出中...
+                     </div>
+                 ) : (
+                     <>
+                        <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                            <Image size={18}/> 下載 JPG
+                        </button>
+                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                            <FileDown size={18}/> 下載 PDF
+                        </button>
+                     </>
+                 )}
+            </div>
+            
+            {/* 增加底部間距以免內容被按鈕遮擋 */}
+            <div className="h-24"></div>
         </div>
     );
 }
