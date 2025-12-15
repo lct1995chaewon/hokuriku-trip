@@ -110,41 +110,51 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- 輔助函式 ---
+// --- [關鍵修正] 針對 iPhone 優化的圖片壓縮函式 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const MAX_SIZE = 800;
-        let width = img.width;
-        let height = img.height;
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
+    // 修正點：使用 createObjectURL 避免 iPhone 讀取大檔時記憶體溢出
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = objectUrl;
+    
+    img.onload = () => {
+      const MAX_SIZE = 800; // 限制最大邊長
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
         }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
+      } else {
+        if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+      }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl); // 釋放記憶體
+        if(blob) {
             resolve(blob);
-        }, 'image/jpeg', 0.6);
-      };
-      img.onerror = reject;
+        } else {
+            reject(new Error("Canvas to Blob failed"));
+        }
+      }, 'image/jpeg', 0.7); // 70% 品質
     };
-    reader.onerror = reject;
+    
+    img.onerror = (e) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(e);
+    };
   });
 };
 
@@ -747,10 +757,11 @@ function MemoriesView({ user }) {
   );
 }
 
-// 修正後的 CollectionView (移除 capture 強制、重置 input value)
+// 修正後的 CollectionView：加入 loading 狀態與錯誤處理
 function CollectionView({ user }) {
   const [items, setItems] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // 新增處理狀態
   const [newImage, setNewImage] = useState(null);
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
@@ -770,18 +781,21 @@ function CollectionView({ user }) {
   const handleCapture = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsProcessing(true); // 開始顯示 loading
       try {
         const compressed = await compressImage(file);
         const base64 = await blobToBase64(compressed);
         setNewImage(base64);
         setIsAdding(true);
-        setIsSticker(false); // 預設關閉貼紙模式
+        setIsSticker(false); 
       } catch (error) {
         console.error("Image processing error:", error);
-        alert("圖片處理失敗，請重試");
+        alert("圖片處理失敗，請試試看比較小的照片");
+      } finally {
+        setIsProcessing(false); // 結束 loading
       }
     }
-    // 重要：重置 input 以確保下次能選取
+    // 確保可以重複選同一張
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -808,12 +822,15 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={triggerCamera} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm"><Camera size={18} /> 拍攝新發現</button>
+        <button onClick={triggerCamera} disabled={isProcessing} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform">
+            {isProcessing ? <Loader2 className="animate-spin"/> : <Camera size={18} />} 
+            {isProcessing ? '照片處理中...' : '拍攝新發現'}
+        </button>
         <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       
-      {/* 隱藏的 input，移除 capture 屬性以提高兼容性 */}
-      <input type="file" ref={fileInputRef} accept="image/*" style={{display:'none'}} onChange={handleCapture} />
+      {/* 修正 input 屬性以相容 iPhone */}
+      <input type="file" ref={fileInputRef} accept="image/*" multiple={false} style={{display:'none'}} onChange={handleCapture} />
       
       {/* 3欄緊湊佈局 */}
       <div className="grid grid-cols-3 gap-1.5">
