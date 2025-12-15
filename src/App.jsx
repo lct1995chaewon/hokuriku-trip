@@ -884,12 +884,18 @@ function MemoirPreview({ items, onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black z-[999] flex flex-col">
-            <div className="absolute top-0 left-0 right-0 p-4 z-[1000] flex justify-end pointer-events-none">
-                <button onClick={onClose} className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 pointer-events-auto hover:bg-black/80 transition-colors shadow-lg"><X size={24}/></button>
+        // [修正點] 改為 Flex Column 且高度為 100dvh
+        <div className="fixed inset-0 bg-zinc-900 z-[999] flex flex-col h-[100dvh]">
+            {/* Header: Close Button */}
+            <div className="absolute top-4 right-4 z-[1000]">
+                <button onClick={onClose} className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 hover:bg-black/80 transition-colors shadow-lg">
+                    <X size={24}/>
+                </button>
             </div>
-            <div className="flex-1 overflow-y-auto animate-in slide-in-from-bottom duration-300 bg-white">
-                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-40 md:p-10 relative">
+
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto bg-white relative">
+                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-20 md:p-10">
                     <div className="flex justify-between items-start mb-2 pt-8">
                         <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
                     </div>
@@ -917,15 +923,19 @@ function MemoirPreview({ items, onClose }) {
                     <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">HOKURIKU TRIP MEMORY</div>
                 </div>
             </div>
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-[1000] flex gap-3 justify-center max-w-lg mx-auto">
-                 {isExporting ? (
-                     <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20"><Loader2 className="animate-spin" size={20}/> 輸出中...</div>
-                 ) : (
-                     <>
-                        <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><ImageIcon size={18}/> 存圖片</button>
-                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><FileDown size={18}/> 存 PDF</button>
-                     </>
-                 )}
+
+            {/* Footer: Static Block (Not Absolute) */}
+            <div className="shrink-0 bg-zinc-900 border-t border-white/10 p-4 pb-8 safe-area-bottom">
+                 <div className="flex gap-3 justify-center max-w-lg mx-auto">
+                     {isExporting ? (
+                         <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20"><Loader2 className="animate-spin" size={20}/> 輸出中...</div>
+                     ) : (
+                         <>
+                            <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><ImageIcon size={18}/> 存圖片</button>
+                            <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><FileDown size={18}/> 存 PDF</button>
+                         </>
+                     )}
+                </div>
             </div>
         </div>
     );
