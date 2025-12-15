@@ -702,7 +702,7 @@ function ExpensesView({ user, ocrReady }) {
                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>收據</span></div>}
                {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
            </div>
-           <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+           <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileChange} />
            <div className="flex gap-2">
                <input type="number" placeholder="¥" value={amount} onChange={e=>setAmount(e.target.value)} className="w-1/3 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
                <input type="text" placeholder="品項" value={description} onChange={e=>setDescription(e.target.value)} className="flex-1 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
@@ -728,7 +728,7 @@ function ExpensesView({ user, ocrReady }) {
   );
 }
 
-// 5. 回憶視圖
+// 5. 回憶視圖 (採集、日記、成就)
 function MemoriesView({ user }) {
   const [subTab, setSubTab] = useState('collection'); 
   return (
@@ -747,6 +747,7 @@ function MemoriesView({ user }) {
   );
 }
 
+// 修正後的 CollectionView (移除 capture 強制、重置 input value)
 function CollectionView({ user }) {
   const [items, setItems] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -762,29 +763,38 @@ function CollectionView({ user }) {
     return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), (snap) => {
       const data = [];
       snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-      setItems(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+      setItems(data.sort((a, b) => b.createdAt - a.createdAt));
     });
   }, [user]);
 
   const handleCapture = async (e) => {
-    if (e.target.files[0]) {
-      const compressed = await compressImage(e.target.files[0]);
-      const base64 = await blobToBase64(compressed);
-      setNewImage(base64);
-      setIsAdding(true);
-      setIsSticker(false); // 預設關閉貼紙模式
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file);
+        const base64 = await blobToBase64(compressed);
+        setNewImage(base64);
+        setIsAdding(true);
+        setIsSticker(false); // 預設關閉貼紙模式
+      } catch (error) {
+        console.error("Image processing error:", error);
+        alert("圖片處理失敗，請重試");
+      }
     }
+    // 重要：重置 input 以確保下次能選取
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const triggerCamera = () => {
+      if(fileInputRef.current) {
+          fileInputRef.current.click();
+      }
   };
 
   const saveItem = async () => {
     if (!newImage || !title) return;
     await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), {
-      image: newImage, 
-      title, 
-      tag, 
-      isSticker,
-      createdAt: serverTimestamp(), 
-      date: new Date().toLocaleDateString('zh-TW')
+      image: newImage, title, tag, isSticker, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW')
     });
     setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
   };
@@ -798,10 +808,12 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm"><Camera size={18} /> 拍攝新發現</button>
+        <button onClick={triggerCamera} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm"><Camera size={18} /> 拍攝新發現</button>
         <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
-      <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleCapture} />
+      
+      {/* 隱藏的 input，移除 capture 屬性以提高兼容性 */}
+      <input type="file" ref={fileInputRef} accept="image/*" style={{display:'none'}} onChange={handleCapture} />
       
       {/* 3欄緊湊佈局 */}
       <div className="grid grid-cols-3 gap-1.5">
@@ -811,15 +823,12 @@ function CollectionView({ user }) {
                     <img src={item.image} className="w-full h-full object-cover" />
                     {item.isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none rounded-full"></div>}
                 </div>
-                
-                {/* 文字遮罩 */}
                 {!item.isSticker && (
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                        <div className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">{item.tag}</div>
                        <div className="text-xs font-bold text-white truncate">{item.title}</div>
                     </div>
                 )}
-
                 <button onClick={(e) => {e.stopPropagation(); deleteItem(item.id);}} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white/80 opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={10}/></button>
             </div>
         ))}
@@ -828,7 +837,6 @@ function CollectionView({ user }) {
         )}
       </div>
 
-      {/* 新增/編輯 Modal */}
       {isAdding && (
           <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in">
               <div className="w-full max-w-sm bg-zinc-900 rounded-3xl p-6 border border-white/10 shadow-2xl relative overflow-hidden">
@@ -836,27 +844,22 @@ function CollectionView({ user }) {
                       {isSticker ? <Sparkles size={18} className="text-yellow-400"/> : <ImageIcon size={18}/>} 
                       {isSticker ? '製作小物貼紙' : '加入圖鑑'}
                   </h3>
-                  
                   <div className="flex justify-center mb-6 relative">
                       <div className={`relative transition-all duration-500 ${isSticker ? 'w-48 h-48 rounded-full border-4 border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'w-full h-48 rounded-xl border border-white/10' } overflow-hidden`}>
                           <img src={newImage} className="w-full h-full object-cover" />
                           {isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none"></div>}
                       </div>
                   </div>
-
                   <div className="flex gap-2 mb-4 bg-zinc-800 p-1 rounded-xl">
                       <button onClick={()=>setIsSticker(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isSticker ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500'}`}>原圖</button>
                       <button onClick={()=>setIsSticker(true)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${isSticker ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-black shadow' : 'text-zinc-500'}`}><Sparkles size={10}/> 貼紙模式</button>
                   </div>
-
                   <input type="text" placeholder="物品名稱" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3 focus:border-sky-500 outline-none transition-colors" />
-                  
                   <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
                       {['小物', '美食', '風景', '紀念'].map(t => (
                           <button key={t} onClick={()=>setTag(t)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${tag===t ? 'bg-sky-500 text-white border-sky-500' : 'bg-transparent text-zinc-500 border-zinc-700'}`}>{t}</button>
                       ))}
                   </div>
-
                   <div className="flex gap-3">
                       <button onClick={() => setIsAdding(false)} className="flex-1 py-3 text-zinc-400 font-bold">取消</button>
                       <button onClick={saveItem} disabled={!title} className={`flex-1 rounded-xl font-bold text-white transition-all ${!title ? 'bg-zinc-800 text-zinc-600' : 'bg-sky-500 shadow-lg shadow-sky-500/20'}`}>儲存</button>
@@ -868,7 +871,7 @@ function CollectionView({ user }) {
   );
 }
 
-// 修正後的 MemoirPreview：按鈕絕對置頂，內容改為雙欄瀑布流
+// 修正後的 MemoirPreview：固定按鈕 + 雙欄瀑布流
 function MemoirPreview({ items, onClose }) {
     const [isExporting, setIsExporting] = useState(false);
     const contentRef = useRef(null);
@@ -877,15 +880,9 @@ function MemoirPreview({ items, onClose }) {
         setIsExporting(true);
         try {
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-            
             const element = contentRef.current;
             if (!element) return;
-
-            const canvas = await window.html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff'
-            });
+            const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
 
             if (type === 'jpg') {
                 const link = document.createElement('a');
@@ -895,10 +892,8 @@ function MemoirPreview({ items, onClose }) {
             } else if (type === 'pdf') {
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
                 const { jsPDF } = window.jspdf;
-                
                 const imgData = canvas.toDataURL('image/jpeg', 0.9);
                 const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 const imgWidth = canvas.width;
@@ -924,33 +919,16 @@ function MemoirPreview({ items, onClose }) {
     };
 
     return (
-        // 外層容器：全螢幕黑色背景，無捲動
         <div className="fixed inset-0 bg-black z-[999] flex flex-col">
-            
-            {/* 1. 固定控制層：絕對置頂 */}
             <div className="absolute top-0 left-0 right-0 p-4 z-[1000] flex justify-end pointer-events-none">
-                <button 
-                    onClick={onClose} 
-                    className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 pointer-events-auto hover:bg-black/80 transition-colors shadow-lg"
-                >
-                    <X size={24}/>
-                </button>
+                <button onClick={onClose} className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 pointer-events-auto hover:bg-black/80 transition-colors shadow-lg"><X size={24}/></button>
             </div>
-
-            {/* 2. 捲動內容層 */}
             <div className="flex-1 overflow-y-auto animate-in slide-in-from-bottom duration-300 bg-white">
-                <div 
-                    ref={contentRef} 
-                    className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-40 md:p-10 relative"
-                >
+                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-40 md:p-10 relative">
                     <div className="flex justify-between items-start mb-2 pt-8">
                         <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
                     </div>
-                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
-                        Winter 2025 <Sparkles size={16} />
-                    </h2>
-                    
-                    {/* 雙欄瀑布流佈局 columns-2 */}
+                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">Winter 2025 <Sparkles size={16} /></h2>
                     <div className="columns-2 gap-4 space-y-4">
                         {items.map((item) => (
                             <div key={item.id} className="break-inside-avoid mb-4 group">
@@ -971,27 +949,16 @@ function MemoirPreview({ items, onClose }) {
                             </div>
                         ))}
                     </div>
-                    
-                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
-                        HOKURIKU TRIP MEMORY
-                    </div>
+                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">HOKURIKU TRIP MEMORY</div>
                 </div>
             </div>
-
-            {/* 3. 底部工具列：固定在螢幕下方 */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-[1000] flex gap-3 justify-center max-w-lg mx-auto">
                  {isExporting ? (
-                     <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20">
-                         <Loader2 className="animate-spin" size={20}/> 輸出中...
-                     </div>
+                     <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20"><Loader2 className="animate-spin" size={20}/> 輸出中...</div>
                  ) : (
                      <>
-                        <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <ImageIcon size={18}/> 存圖片
-                        </button>
-                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <FileDown size={18}/> 存 PDF
-                        </button>
+                        <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><ImageIcon size={18}/> 存圖片</button>
+                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><FileDown size={18}/> 存 PDF</button>
                      </>
                  )}
             </div>
@@ -1086,7 +1053,6 @@ function MissionsView({ user }) {
             type="file" 
             ref={fileInputRef} 
             accept="image/*" 
-            capture="environment" 
             className="hidden" 
             onChange={handleFileChange} 
         />
