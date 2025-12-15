@@ -753,7 +753,7 @@ function CollectionView({ user }) {
   const [newImage, setNewImage] = useState(null);
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
-  const [isSticker, setIsSticker] = useState(false); // 新增貼紙狀態
+  const [isSticker, setIsSticker] = useState(false);
   const fileInputRef = useRef(null);
   const [showMemoir, setShowMemoir] = useState(false);
 
@@ -762,7 +762,7 @@ function CollectionView({ user }) {
     return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), (snap) => {
       const data = [];
       snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-      setItems(data.sort((a, b) => b.createdAt - a.createdAt));
+      setItems(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
     });
   }, [user]);
 
@@ -782,7 +782,7 @@ function CollectionView({ user }) {
       image: newImage, 
       title, 
       tag, 
-      isSticker, // 儲存是否為貼紙
+      isSticker,
       createdAt: serverTimestamp(), 
       date: new Date().toLocaleDateString('zh-TW')
     });
@@ -798,31 +798,34 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 border border-white/20">
-            <Camera size={20} /> 採集小物
-        </button>
-        <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-2xl border border-white/5 text-zinc-400 hover:text-white transition-colors"><Share size={20} /></button>
+        <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm"><Camera size={18} /> 拍攝新發現</button>
+        <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleCapture} />
       
-      <div className="grid grid-cols-2 gap-3">
+      {/* 3欄緊湊佈局 */}
+      <div className="grid grid-cols-3 gap-1.5">
         {items.map(item => (
-            <div key={item.id} className={`relative group transition-all duration-300 ${item.isSticker ? 'bg-transparent p-2' : 'bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden'}`}>
-                {/* 貼紙模式 vs 普通照片模式的渲染差異 */}
-                <div className={`w-full aspect-square object-cover relative ${item.isSticker ? 'rounded-full border-4 border-white shadow-[0_8px_16px_rgba(0,0,0,0.5)] overflow-hidden scale-95' : ''}`}>
+            <div key={item.id} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden'}`}>
+                <div className={`w-full h-full relative ${item.isSticker ? 'rounded-full border-2 border-white shadow-lg overflow-hidden scale-95' : ''}`}>
                     <img src={item.image} className="w-full h-full object-cover" />
                     {item.isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none rounded-full"></div>}
                 </div>
                 
-                <div className={`mt-2 ${item.isSticker ? 'text-center' : 'p-3'}`}>
-                    <div className={`text-[10px] font-bold mb-0.5 uppercase tracking-wider ${item.isSticker ? 'text-white bg-black/50 px-2 py-0.5 rounded-full inline-block backdrop-blur-sm' : 'text-sky-500'}`}>{item.tag}</div>
-                    <div className="text-sm font-bold text-white truncate drop-shadow-md">{item.title}</div>
-                    {!item.isSticker && <div className="text-[10px] text-zinc-500 mt-1">{item.date}</div>}
-                </div>
+                {/* 文字遮罩 */}
+                {!item.isSticker && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                       <div className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">{item.tag}</div>
+                       <div className="text-xs font-bold text-white truncate">{item.title}</div>
+                    </div>
+                )}
 
-                <button onClick={() => deleteItem(item.id)} className="absolute top-0 right-0 m-2 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={12}/></button>
+                <button onClick={(e) => {e.stopPropagation(); deleteItem(item.id);}} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white/80 opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={10}/></button>
             </div>
         ))}
+        {items.length === 0 && (
+           <div className="col-span-3 py-10 text-center text-zinc-600 text-xs border border-dashed border-zinc-800 rounded-xl">還沒有回憶，快去拍照吧！</div>
+        )}
       </div>
 
       {/* 新增/編輯 Modal */}
@@ -834,7 +837,6 @@ function CollectionView({ user }) {
                       {isSticker ? '製作小物貼紙' : '加入圖鑑'}
                   </h3>
                   
-                  {/* 圖片預覽區域：根據模式改變形狀 */}
                   <div className="flex justify-center mb-6 relative">
                       <div className={`relative transition-all duration-500 ${isSticker ? 'w-48 h-48 rounded-full border-4 border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'w-full h-48 rounded-xl border border-white/10' } overflow-hidden`}>
                           <img src={newImage} className="w-full h-full object-cover" />
@@ -842,7 +844,6 @@ function CollectionView({ user }) {
                       </div>
                   </div>
 
-                  {/* 切換模式按鈕 */}
                   <div className="flex gap-2 mb-4 bg-zinc-800 p-1 rounded-xl">
                       <button onClick={()=>setIsSticker(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isSticker ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500'}`}>原圖</button>
                       <button onClick={()=>setIsSticker(true)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${isSticker ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-black shadow' : 'text-zinc-500'}`}><Sparkles size={10}/> 貼紙模式</button>
@@ -867,7 +868,7 @@ function CollectionView({ user }) {
   );
 }
 
-// 修正後的 MemoirPreview：按鈕絕對置頂，不再隨畫面捲動
+// 修正後的 MemoirPreview：按鈕絕對置頂，內容改為雙欄瀑布流
 function MemoirPreview({ items, onClose }) {
     const [isExporting, setIsExporting] = useState(false);
     const contentRef = useRef(null);
@@ -926,7 +927,7 @@ function MemoirPreview({ items, onClose }) {
         // 外層容器：全螢幕黑色背景，無捲動
         <div className="fixed inset-0 bg-black z-[999] flex flex-col">
             
-            {/* 1. 固定控制層：絕對置頂，不會被捲動影響 */}
+            {/* 1. 固定控制層：絕對置頂 */}
             <div className="absolute top-0 left-0 right-0 p-4 z-[1000] flex justify-end pointer-events-none">
                 <button 
                     onClick={onClose} 
@@ -936,36 +937,36 @@ function MemoirPreview({ items, onClose }) {
                 </button>
             </div>
 
-            {/* 2. 捲動內容層：獨立的捲動區域 */}
+            {/* 2. 捲動內容層 */}
             <div className="flex-1 overflow-y-auto animate-in slide-in-from-bottom duration-300 bg-white">
                 <div 
                     ref={contentRef} 
                     className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-40 md:p-10 relative"
                 >
                     <div className="flex justify-between items-start mb-2 pt-8">
-                        {/* 標題字體調整 */}
                         <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
                     </div>
                     <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
                         Winter 2025 <Sparkles size={16} />
                     </h2>
                     
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-8">
+                    {/* 雙欄瀑布流佈局 columns-2 */}
+                    <div className="columns-2 gap-4 space-y-4">
                         {items.map((item) => (
-                            <div key={item.id} className="break-inside-avoid flex flex-col items-center group">
+                            <div key={item.id} className="break-inside-avoid mb-4 group">
                                 {item.isSticker ? (
-                                    <div className="w-32 h-32 rounded-full border-[6px] border-gray-200 shadow-xl overflow-hidden mb-3 relative transform hover:scale-105 transition-transform duration-500">
+                                    <div className="w-full aspect-square rounded-full border-[4px] border-gray-200 shadow-xl overflow-hidden mb-2 relative transform hover:scale-105 transition-transform duration-500">
                                         <img src={item.image} className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/40 pointer-events-none"></div>
                                     </div>
                                 ) : (
-                                    <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100 shadow-md transform hover:rotate-1 transition-transform duration-500">
-                                        <img src={item.image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                                    <div className="w-full overflow-hidden rounded-lg mb-2 bg-gray-100 shadow-sm border border-black/5">
+                                        <img src={item.image} className="w-full h-auto block grayscale group-hover:grayscale-0 transition-all duration-500" />
                                     </div>
                                 )}
-                                <div className="text-center w-full">
-                                    <span className="font-bold text-sm block truncate px-1">{item.title}</span>
-                                    <span className="text-[10px] font-mono text-gray-400">{item.date}</span>
+                                <div className="px-1 text-center">
+                                    <div className="font-bold text-xs text-zinc-800 leading-tight">{item.title}</div>
+                                    <div className="text-[9px] font-mono text-gray-400 mt-0.5">{item.date.split('/')[1]}/{item.date.split('/')[2]}</div>
                                 </div>
                             </div>
                         ))}
