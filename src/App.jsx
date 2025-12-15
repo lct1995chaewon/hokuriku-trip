@@ -110,7 +110,7 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- [關鍵修正] 強力圖片壓縮函式 ---
+// --- [關鍵修正] 針對 iPhone 內存的極限壓縮 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
@@ -118,52 +118,49 @@ const compressImage = (file) => {
     img.src = objectUrl;
     
     img.onload = () => {
-      // 初始最大尺寸
-      const MAX_INITIAL_SIZE = 900; 
+      // 1. 強制將圖片縮小到 800px 以下，確保不會爆內存
+      const MAX_SIZE = 800; 
       let width = img.width;
       let height = img.height;
       
       if (width > height) {
-        if (width > MAX_INITIAL_SIZE) {
-          height *= MAX_INITIAL_SIZE / width;
-          width = MAX_INITIAL_SIZE;
+        if (width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
         }
       } else {
-        if (height > MAX_INITIAL_SIZE) {
-          width *= MAX_INITIAL_SIZE / height;
-          height = MAX_INITIAL_SIZE;
+        if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
         }
       }
       
       const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
       
-      // 遞迴壓縮函式：確保檔案一定小於 400KB (Base64 約 530KB，Firestore 限制為 1MB，非常安全)
-      const attemptCompression = (w, h, q) => {
-          canvas.width = w;
-          canvas.height = h;
-          ctx.drawImage(img, 0, 0, w, h);
+      // 2. 直接轉換為 Base64 字串，品質設為 0.5 (中等畫質，體積小)
+      // 使用 try-catch 攔截可能的 canvas 錯誤
+      try {
+          const base64 = canvas.toDataURL('image/jpeg', 0.5);
           
-          canvas.toBlob((blob) => {
-              if (!blob) {
-                  URL.revokeObjectURL(objectUrl);
-                  reject(new Error("壓縮失敗"));
-                  return;
-              }
-              
-              // 400KB 安全線
-              if (blob.size > 400 * 1024) {
-                  // 如果還是太大，尺寸縮小 20% 再試一次
-                  attemptCompression(w * 0.8, h * 0.8, q);
-              } else {
-                  URL.revokeObjectURL(objectUrl);
-                  resolve(blob);
-              }
-          }, 'image/jpeg', q);
-      };
-
-      // 開始壓縮：品質設定 0.6
-      attemptCompression(width, height, 0.6);
+          // 3. 簡單檢查：如果字串長度超過 90萬字元 (約 650KB)，就認定可能上傳失敗
+          // 雖然犧牲畫質，但在無後端儲存的情況下這是唯一解法
+          if (base64.length > 900000) {
+              // 再壓縮一次
+              const q = 0.3;
+              const tinyBase64 = canvas.toDataURL('image/jpeg', q);
+              resolve(tinyBase64);
+          } else {
+              resolve(base64);
+          }
+      } catch (e) {
+          reject(e);
+      } finally {
+          URL.revokeObjectURL(objectUrl);
+      }
     };
     
     img.onerror = (e) => {
@@ -173,26 +170,7 @@ const compressImage = (file) => {
   });
 };
 
-const fileToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = error => reject(error);
-  });
-};
-
-const blobToBase64 = (blob) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
+// 這次移除了 blobToBase64，因為 compressImage 直接回傳 base64，減少轉換步驟避免當機
 
 const loadScript = (src) => {
     return new Promise((resolve, reject) => {
@@ -649,11 +627,21 @@ function ExpensesView({ user, ocrReady }) {
     });
   }, [user]);
 
-  const handleFileChange = (e) => {
-      if (e.target.files[0]) {
-          fileRef.current = e.target.files[0];
-          setImagePreview(URL.createObjectURL(e.target.files[0]));
+  const handleFileChange = async (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          // 這裡也需要壓縮，避免 OCR 圖片太大上傳失敗
+          try {
+              const b64 = await compressImage(file);
+              setImagePreview(b64); // 直接用 base64 顯示
+              // fileRef.current = file; // 舊的
+              // 為了 OCR，我們需要將 base64 轉回 blob 或者直接用
+              // 簡化起見，直接用 compressImage 回傳的 base64
+          } catch(e) {
+              console.error(e);
+          }
       }
+      e.target.value = '';
   };
 
   const handleSmartScan = async () => {
@@ -661,9 +649,8 @@ function ExpensesView({ user, ocrReady }) {
     setIsAnalyzing(true);
     try {
       if (!window.Tesseract) throw new Error("OCR loading...");
-      const compressedBlob = await compressImage(fileRef.current);
-      const url = URL.createObjectURL(compressedBlob);
-      const { data: { text } } = await window.Tesseract.recognize(url, 'eng');
+      // imagePreview 已經是壓縮過的 Base64，直接傳給 Tesseract
+      const { data: { text } } = await window.Tesseract.recognize(imagePreview, 'eng');
       const numbers = text.match(/(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?/g);
       if (numbers) {
          const maxNum = numbers.map(n => parseFloat(n.replace(/,/g, ''))).filter(n => !isNaN(n)).sort((a,b)=>b-a)[0];
@@ -698,6 +685,7 @@ function ExpensesView({ user, ocrReady }) {
                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>收據</span></div>}
                {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
            </div>
+           {/* [關鍵修正]：讓 iPhone 能點擊 */}
            <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileChange} />
            <div className="flex gap-2">
                <input type="number" placeholder="¥" value={amount} onChange={e=>setAmount(e.target.value)} className="w-1/3 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
@@ -767,8 +755,8 @@ function CollectionView({ user }) {
     if (file) {
       setIsProcessing(true);
       try {
-        const compressed = await compressImage(file);
-        const base64 = await blobToBase64(compressed);
+        // [關鍵修正] 直接回傳 Base64 字串
+        const base64 = await compressImage(file);
         setNewImage(base64);
         setIsAdding(true);
         setIsSticker(false); 
@@ -796,7 +784,8 @@ function CollectionView({ user }) {
         });
         setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
     } catch(e) {
-        alert("存檔失敗 (可能是圖片依然過大，請多試幾次)");
+        alert("存檔失敗: 圖片仍然過大，建議使用「截圖」後再上傳");
+        console.error(e);
     }
   };
 
@@ -816,8 +805,10 @@ function CollectionView({ user }) {
         <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       
-      <input type="file" ref={fileInputRef} accept="image/*" multiple={false} style={{display:'none'}} onChange={handleCapture} />
+      {/* 修正 input 屬性以相容 iPhone */}
+      <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleCapture} />
       
+      {/* 3欄緊湊佈局 */}
       <div className="grid grid-cols-3 gap-1.5">
         {items.map(item => (
             <div key={item.id} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden'}`}>
@@ -1024,11 +1015,12 @@ function MissionsView({ user }) {
       setUploading(true);
       try {
           const compressed = await compressImage(file);
-          const base64 = await blobToBase64(compressed);
+          // 任務圖片也需要壓縮後的 base64
+          // 這裡 compressImage 已經回傳 base64 字串
           
           await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', activeMissionId), { 
               completed: true, 
-              image: base64,
+              image: compressed, // 直接存
               completedAt: serverTimestamp()
           }, { merge: true });
           
