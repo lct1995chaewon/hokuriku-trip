@@ -852,11 +852,22 @@ function CollectionView({ user }) {
   );
 }
 
+// 修正後的 MemoirPreview (固定按鈕 + 底部按鈕)
 function MemoirPreview({ items, onClose }) {
     return (
-        <div className="fixed inset-0 bg-black z-[90] overflow-y-auto p-4 animate-in slide-in-from-bottom">
-            <div className="max-w-md mx-auto bg-white text-black min-h-screen rounded-3xl p-8 relative">
-                <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+        <div className="fixed inset-0 bg-black z-[90] overflow-y-auto animate-in slide-in-from-bottom">
+            
+            {/* 1. 改為懸浮固定按鈕：永遠停留在右上角，不會隨頁面捲動消失 */}
+            <button 
+                onClick={onClose} 
+                className="fixed top-4 right-4 z-[100] bg-black/80 text-white p-3 rounded-full shadow-2xl border border-white/20 backdrop-blur-md active:scale-90 transition-transform"
+            >
+                <X size={24}/>
+            </button>
+
+            {/* 內容區域：增加 padding-top 避免內容被按鈕遮住 */}
+            <div className="min-h-screen w-full md:max-w-md md:mx-auto bg-white text-black md:rounded-3xl p-6 pt-20 md:p-8 md:pt-8 md:my-8 relative shadow-2xl">
+                
                 <div className="flex justify-between items-start mb-2">
                     <h1 className="text-4xl font-black tracking-tighter">COLLECTION</h1>
                 </div>
@@ -866,7 +877,7 @@ function MemoirPreview({ items, onClose }) {
                 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-8">
                     {items.map((item) => (
-                        <div key={item.id} className="break-inside-avoid flex flex-col items-center">
+                        <div key={item.id} className="break-inside-avoid flex flex-col items-center group">
                             {/* 根據是否為貼紙，改變預覽樣式 */}
                             {item.isSticker ? (
                                 <div className="w-32 h-32 rounded-full border-[6px] border-gray-200 shadow-xl overflow-hidden mb-3 relative transform hover:scale-105 transition-transform duration-500">
@@ -875,21 +886,26 @@ function MemoirPreview({ items, onClose }) {
                                 </div>
                             ) : (
                                 <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100 shadow-md transform hover:rotate-1 transition-transform duration-500">
-                                    <img src={item.image} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" />
+                                    <img src={item.image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                                 </div>
                             )}
                             
-                            <div className="text-center">
-                                <span className="font-bold text-sm block">{item.title}</span>
+                            <div className="text-center w-full">
+                                <span className="font-bold text-sm block truncate px-1">{item.title}</span>
                                 <span className="text-[10px] font-mono text-gray-400">{item.date}</span>
                             </div>
                         </div>
                     ))}
                 </div>
                 
-                <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
+                <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono mb-8">
                     HOKURIKU TRIP MEMORY
                 </div>
+
+                {/* 2. 底部增加一個返回按鈕，雙重保險 */}
+                <button onClick={onClose} className="w-full py-4 bg-gray-100 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">
+                    返回上一頁
+                </button>
             </div>
         </div>
     );
