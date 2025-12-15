@@ -110,7 +110,7 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- [關鍵修正] 智能圖片壓縮函式 ---
+// --- [關鍵修正] 強力圖片壓縮函式 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
@@ -118,55 +118,52 @@ const compressImage = (file) => {
     img.src = objectUrl;
     
     img.onload = () => {
-      // 1. 設定初始最大尺寸 (比之前大，畫質較好)
-      const MAX_SIZE = 1024; 
+      // 初始最大尺寸
+      const MAX_INITIAL_SIZE = 900; 
       let width = img.width;
       let height = img.height;
       
-      // 保持比例調整尺寸
       if (width > height) {
-        if (width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
+        if (width > MAX_INITIAL_SIZE) {
+          height *= MAX_INITIAL_SIZE / width;
+          width = MAX_INITIAL_SIZE;
         }
       } else {
-        if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
+        if (height > MAX_INITIAL_SIZE) {
+          width *= MAX_INITIAL_SIZE / height;
+          height = MAX_INITIAL_SIZE;
         }
       }
       
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
       
-      // 2. 第一次嘗試壓縮 (品質 0.6)
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        
-        if (blob) {
-            // 3. 檢查檔案大小，如果超過 900KB (接近 Firebase 1MB 限制)，強制再縮小
-            if (blob.size > 900 * 1024) {
-                 const newQuality = 0.5; // 降低品質
-                 const newCanvas = document.createElement('canvas');
-                 const scaleFactor = 0.8; // 再縮小 20%
-                 newCanvas.width = width * scaleFactor;
-                 newCanvas.height = height * scaleFactor;
-                 const newCtx = newCanvas.getContext('2d');
-                 newCtx.drawImage(img, 0, 0, newCanvas.width, newCanvas.height);
-                 
-                 newCanvas.toBlob((newBlob) => {
-                     resolve(newBlob); // 回傳較小的圖
-                 }, 'image/jpeg', newQuality);
-            } else {
-                resolve(blob);
-            }
-        } else {
-            reject(new Error("圖片處理失敗"));
-        }
-      }, 'image/jpeg', 0.6); 
+      // 遞迴壓縮函式：確保檔案一定小於 400KB (Base64 約 530KB，Firestore 限制為 1MB，非常安全)
+      const attemptCompression = (w, h, q) => {
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          
+          canvas.toBlob((blob) => {
+              if (!blob) {
+                  URL.revokeObjectURL(objectUrl);
+                  reject(new Error("壓縮失敗"));
+                  return;
+              }
+              
+              // 400KB 安全線
+              if (blob.size > 400 * 1024) {
+                  // 如果還是太大，尺寸縮小 20% 再試一次
+                  attemptCompression(w * 0.8, h * 0.8, q);
+              } else {
+                  URL.revokeObjectURL(objectUrl);
+                  resolve(blob);
+              }
+          }, 'image/jpeg', q);
+      };
+
+      // 開始壓縮：品質設定 0.6
+      attemptCompression(width, height, 0.6);
     };
     
     img.onerror = (e) => {
@@ -235,7 +232,7 @@ const SnowOverlay = () => {
     const flakes = Array.from({ length: 20 }).map((_, i) => ({
         id: i,
         left: Math.random() * 100 + 'vw',
-        animationDuration: (Math.random() * 5 + 5) + 's',
+        animationDuration: (Math.random() * 5 + 5) + 's', // 5-10s
         animationDelay: (Math.random() * 5) + 's',
         opacity: Math.random() * 0.5 + 0.3,
         size: Math.random() * 10 + 5 + 'px'
