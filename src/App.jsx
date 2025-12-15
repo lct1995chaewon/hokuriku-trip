@@ -867,7 +867,7 @@ function CollectionView({ user }) {
   );
 }
 
-// 修正後的 MemoirPreview (固定按鈕 + 底部按鈕 + 下載 PDF/JPG 功能)
+// 修正後的 MemoirPreview：按鈕絕對置頂，不再隨畫面捲動
 function MemoirPreview({ items, onClose }) {
     const [isExporting, setIsExporting] = useState(false);
     const contentRef = useRef(null);
@@ -875,14 +875,11 @@ function MemoirPreview({ items, onClose }) {
     const handleExport = async (type) => {
         setIsExporting(true);
         try {
-            // 動態載入 html2canvas 和 jsPDF (保持單一檔案優勢，不需 npm install)
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
             
             const element = contentRef.current;
             if (!element) return;
 
-            // 1. 產生 Canvas
-            // scale: 2 確保圖片清晰
             const canvas = await window.html2canvas(element, {
                 scale: 2,
                 useCORS: true,
@@ -890,40 +887,26 @@ function MemoirPreview({ items, onClose }) {
             });
 
             if (type === 'jpg') {
-                // 2a. 下載 JPG
                 const link = document.createElement('a');
                 link.download = `Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.jpg`;
                 link.href = canvas.toDataURL('image/jpeg', 0.9);
                 link.click();
             } else if (type === 'pdf') {
-                // 2b. 下載 PDF
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
                 const { jsPDF } = window.jspdf;
                 
                 const imgData = canvas.toDataURL('image/jpeg', 0.9);
-                const pdf = new jsPDF({
-                    orientation: 'p',
-                    unit: 'mm',
-                    format: 'a4'
-                });
+                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 const imgWidth = canvas.width;
                 const imgHeight = canvas.height;
                 const ratio = imgWidth / imgHeight;
-                const widthInPdf = pdfWidth;
-                const heightInPdf = widthInPdf / ratio;
+                const heightInPdf = pdfWidth / ratio;
 
-                // 如果內容很長，可能會被切斷，這裡做簡單的單頁縮放 (長圖風格)
-                // 若要分頁會更複雜，目前以產生單張長 PDF 為主 (A4 寬度，高度自適應)
                 if (heightInPdf > pdfHeight) {
-                    // 如果長度超過 A4，建立自訂長度的 PDF
-                    const longPdf = new jsPDF({
-                        orientation: 'p',
-                        unit: 'mm',
-                        format: [pdfWidth, heightInPdf]
-                    });
+                    const longPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, heightInPdf] });
                     longPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
                     longPdf.save(`Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.pdf`);
                 } else {
@@ -940,74 +923,77 @@ function MemoirPreview({ items, onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black z-[90] overflow-y-auto animate-in slide-in-from-bottom">
+        // 外層容器：全螢幕黑色背景，無捲動
+        <div className="fixed inset-0 bg-black z-[999] flex flex-col">
             
-            {/* 懸浮固定關閉按鈕 */}
-            <button 
-                onClick={onClose} 
-                className="fixed top-4 right-4 z-[100] bg-black/80 text-white p-3 rounded-full shadow-2xl border border-white/20 backdrop-blur-md active:scale-90 transition-transform"
-            >
-                <X size={24}/>
-            </button>
+            {/* 1. 固定控制層：絕對置頂，不會被捲動影響 */}
+            <div className="absolute top-0 left-0 right-0 p-4 z-[1000] flex justify-end pointer-events-none">
+                <button 
+                    onClick={onClose} 
+                    className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 pointer-events-auto hover:bg-black/80 transition-colors shadow-lg"
+                >
+                    <X size={24}/>
+                </button>
+            </div>
 
-            {/* 內容區域 - 使用 ref 標記需要截圖的範圍 */}
-            <div ref={contentRef} className="min-h-screen w-full md:max-w-md md:mx-auto bg-white text-black md:rounded-3xl p-6 pt-20 md:p-8 md:pt-8 md:my-8 relative shadow-2xl" id="memoir-content">
-                
-                <div className="flex justify-between items-start mb-2">
-                    <h1 className="text-4xl font-black tracking-tighter">COLLECTION</h1>
-                </div>
-                <h2 className="text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
-                    Winter 2025 <Sparkles size={16} />
-                </h2>
-                
-                <div className="grid grid-cols-2 gap-x-4 gap-y-8">
-                    {items.map((item) => (
-                        <div key={item.id} className="break-inside-avoid flex flex-col items-center group">
-                            {/* 根據是否為貼紙，改變預覽樣式 */}
-                            {item.isSticker ? (
-                                <div className="w-32 h-32 rounded-full border-[6px] border-gray-200 shadow-xl overflow-hidden mb-3 relative transform hover:scale-105 transition-transform duration-500">
-                                    <img src={item.image} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/40 pointer-events-none"></div>
+            {/* 2. 捲動內容層：獨立的捲動區域 */}
+            <div className="flex-1 overflow-y-auto animate-in slide-in-from-bottom duration-300 bg-white">
+                <div 
+                    ref={contentRef} 
+                    className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-40 md:p-10 relative"
+                >
+                    <div className="flex justify-between items-start mb-2 pt-8">
+                        {/* 標題字體調整 */}
+                        <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
+                    </div>
+                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
+                        Winter 2025 <Sparkles size={16} />
+                    </h2>
+                    
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-8">
+                        {items.map((item) => (
+                            <div key={item.id} className="break-inside-avoid flex flex-col items-center group">
+                                {item.isSticker ? (
+                                    <div className="w-32 h-32 rounded-full border-[6px] border-gray-200 shadow-xl overflow-hidden mb-3 relative transform hover:scale-105 transition-transform duration-500">
+                                        <img src={item.image} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/40 pointer-events-none"></div>
+                                    </div>
+                                ) : (
+                                    <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100 shadow-md transform hover:rotate-1 transition-transform duration-500">
+                                        <img src={item.image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                                    </div>
+                                )}
+                                <div className="text-center w-full">
+                                    <span className="font-bold text-sm block truncate px-1">{item.title}</span>
+                                    <span className="text-[10px] font-mono text-gray-400">{item.date}</span>
                                 </div>
-                            ) : (
-                                <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100 shadow-md transform hover:rotate-1 transition-transform duration-500">
-                                    <img src={item.image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
-                                </div>
-                            )}
-                            
-                            <div className="text-center w-full">
-                                <span className="font-bold text-sm block truncate px-1">{item.title}</span>
-                                <span className="text-[10px] font-mono text-gray-400">{item.date}</span>
                             </div>
-                        </div>
-                    ))}
-                </div>
-                
-                <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono mb-8">
-                    HOKURIKU TRIP MEMORY
+                        ))}
+                    </div>
+                    
+                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
+                        HOKURIKU TRIP MEMORY
+                    </div>
                 </div>
             </div>
 
-            {/* 底部操作區 (截圖時會被忽略，因為它在 ref 之外) */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black to-transparent z-[100] flex gap-3 justify-center md:max-w-md md:mx-auto">
+            {/* 3. 底部工具列：固定在螢幕下方 */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-[1000] flex gap-3 justify-center max-w-lg mx-auto">
                  {isExporting ? (
-                     <div className="bg-black/80 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md">
+                     <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20">
                          <Loader2 className="animate-spin" size={20}/> 輸出中...
                      </div>
                  ) : (
                      <>
                         <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <Image size={18}/> 下載 JPG
+                            <ImageIcon size={18}/> 存圖片
                         </button>
-                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <FileDown size={18}/> 下載 PDF
+                        <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                            <FileDown size={18}/> 存 PDF
                         </button>
                      </>
                  )}
             </div>
-            
-            {/* 增加底部間距以免內容被按鈕遮擋 */}
-            <div className="h-24"></div>
         </div>
     );
 }
