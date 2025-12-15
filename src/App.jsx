@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -20,9 +20,9 @@ try {
 } catch (e) {
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
-    SyBp8BT3jN: "hokuriku-trip.firebaseapp.com",
+    authDomain: "hokuriku-trip.firebaseapp.com",
     projectId: "hokuriku-trip",
-    storageBucke : "hokuriku-trip.firebasestorage.app",
+    storageBucket: "hokuriku-trip.firebasestorage.app",
     messagingSenderId: "170805929872",
     appId: "1:170805929872:web:ade0f3cc9f27ad7a84f515",
     measurementId: "G-4Q500J33FZ"
@@ -169,17 +169,67 @@ const blobToBase64 = (blob) => {
   });
 };
 
+// --- CSS Animation Injector for Snow ---
+const SnowStyle = () => (
+    <style>{`
+      @keyframes snowfall {
+        0% { transform: translateY(-10px) translateX(0px); opacity: 0; }
+        20% { opacity: 1; }
+        100% { transform: translateY(100vh) translateX(20px); opacity: 0; }
+      }
+      .snowflake {
+        position: fixed;
+        top: -10px;
+        color: white;
+        pointer-events: none;
+        animation-name: snowfall;
+        animation-iteration-count: infinite;
+        animation-timing-function: linear;
+        z-index: 50;
+      }
+    `}</style>
+);
+
+const SnowOverlay = () => {
+    const flakes = Array.from({ length: 20 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100 + 'vw',
+        animationDuration: (Math.random() * 5 + 5) + 's', // 5-10s
+        animationDelay: (Math.random() * 5) + 's',
+        opacity: Math.random() * 0.5 + 0.3,
+        size: Math.random() * 10 + 5 + 'px'
+    }));
+
+    return (
+        <>
+            <SnowStyle />
+            {flakes.map(f => (
+                <div key={f.id} className="snowflake" style={{
+                    left: f.left,
+                    animationDuration: f.animationDuration,
+                    animationDelay: f.animationDelay,
+                    opacity: f.opacity,
+                    fontSize: f.size
+                }}>❄</div>
+            ))}
+        </>
+    );
+};
+
 // --- 共用組件 ---
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl scale-100 animate-in zoom-in-95 ring-1 ring-white/10">
-        <h3 className="font-bold text-white text-lg mb-2">{title}</h3>
-        <p className="text-zinc-400 text-sm mb-6 leading-relaxed">{message}</p>
-        <div className="flex gap-3">
+      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl scale-100 animate-in zoom-in-95 ring-1 ring-white/10 relative overflow-hidden">
+        {/* 聖誕裝飾背景 */}
+        <div className="absolute top-0 right-0 p-4 opacity-10"><Gift size={60} /></div>
+        
+        <h3 className="font-bold text-white text-lg mb-2 relative z-10">{title}</h3>
+        <p className="text-zinc-400 text-sm mb-6 leading-relaxed relative z-10">{message}</p>
+        <div className="flex gap-3 relative z-10">
           <button onClick={onClose} className="flex-1 py-3 rounded-2xl font-bold text-zinc-400 bg-white/5 hover:bg-white/10 transition-colors">取消</button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 transition-colors">刪除</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20 transition-colors">確認</button>
         </div>
       </div>
     </div>
@@ -189,7 +239,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
 function NavButton({ icon, label, active, onClick, color }) {
   return (
     <button onClick={onClick} className={`flex flex-col items-center justify-center w-16 h-full transition-all duration-300 ${active ? 'scale-110 -translate-y-1' : 'opacity-50 hover:opacity-100'}`}>
-      <div className={`p-1.5 rounded-xl transition-colors ${active ? 'bg-white/10' : ''} ${active ? color : 'text-zinc-400'}`}>
+      <div className={`p-1.5 rounded-xl transition-colors ${active ? 'bg-white/15 backdrop-blur-sm ring-1 ring-white/20' : ''} ${active ? color : 'text-zinc-400'}`}>
         {icon}
       </div>
       {active && <span className={`text-[9px] font-bold mt-1 ${color}`}>{label}</span>}
@@ -236,24 +286,34 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-black text-gray-100 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-zinc-800">
-      {/* 背景 */}
+      
+      {/* 全局飄雪特效 */}
+      <SnowOverlay />
+
+      {/* 聖誕主題背景 (紅/綠/金氛圍) */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full bg-blue-900/20 blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] rounded-full bg-purple-900/20 blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full bg-rose-900/20 blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] rounded-full bg-emerald-900/20 blur-[100px]"></div>
       </div>
 
       {/* 頂部 Header */}
-      <header className="bg-black/60 backdrop-blur-xl pt-12 pb-4 px-6 sticky top-0 z-20 border-b border-white/5">
-        <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 drop-shadow-xl">
-           {activeTab === 'itinerary' && <><Calendar className="text-blue-400" /> 行程總覽</>}
-           {activeTab === 'assistant' && <><LayoutGrid className="text-indigo-400" /> 旅途助手</>}
-           {activeTab === 'wallet' && <><CreditCard className="text-emerald-400" /> 消費記帳</>}
-           {activeTab === 'memories' && <><BookOpen className="text-amber-400" /> 回憶圖鑑</>}
-        </h1>
+      <header className="bg-black/60 backdrop-blur-xl pt-12 pb-4 px-6 sticky top-0 z-20 border-b border-white/5 relative">
+        <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 drop-shadow-xl">
+            {activeTab === 'itinerary' && <><Calendar className="text-red-400" /> 行程總覽</>}
+            {activeTab === 'assistant' && <><LayoutGrid className="text-emerald-400" /> 旅途助手</>}
+            {activeTab === 'wallet' && <><CreditCard className="text-amber-400" /> 消費記帳</>}
+            {activeTab === 'memories' && <><BookOpen className="text-sky-400" /> 回憶圖鑑</>}
+            </h1>
+            {/* 聖誕裝飾 Icon */}
+            <div className="animate-bounce duration-[2000ms]">
+                <TreePine size={24} className="text-emerald-500 fill-emerald-500/20" />
+            </div>
+        </div>
       </header>
 
       {/* 主要內容 */}
-      <main className="flex-1 overflow-y-auto p-4 pb-32 scroll-smooth scrollbar-hide z-10">
+      <main className="flex-1 overflow-y-auto p-4 pb-32 scroll-smooth scrollbar-hide z-10 relative">
         {!user ? (
           <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-zinc-600" /></div>
         ) : (
@@ -266,12 +326,12 @@ export default function App() {
         )}
       </main>
 
-      {/* 底部懸浮導航 */}
-      <nav className="absolute bottom-8 left-4 right-4 h-16 bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-full z-30 shadow-2xl flex justify-around items-center px-2">
-        <NavButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} color="text-blue-400" />
-        <NavButton icon={<LayoutGrid size={20} />} label="助手" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} color="text-indigo-400" />
-        <NavButton icon={<CreditCard size={20} />} label="記帳" active={activeTab === 'wallet'} onClick={() => setActiveTab('wallet')} color="text-emerald-400" />
-        <NavButton icon={<BookOpen size={20} />} label="回憶" active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} color="text-amber-400" />
+      {/* 底部懸浮導航 (毛玻璃特效加強) */}
+      <nav className="absolute bottom-8 left-4 right-4 h-16 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-full z-30 shadow-2xl flex justify-around items-center px-2">
+        <NavButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} color="text-red-400" />
+        <NavButton icon={<LayoutGrid size={20} />} label="助手" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} color="text-emerald-400" />
+        <NavButton icon={<CreditCard size={20} />} label="記帳" active={activeTab === 'wallet'} onClick={() => setActiveTab('wallet')} color="text-amber-400" />
+        <NavButton icon={<BookOpen size={20} />} label="回憶" active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} color="text-sky-400" />
       </nav>
     </div>
   );
@@ -279,7 +339,7 @@ export default function App() {
 
 // --- Views 實作 ---
 
-// 1. 行程視圖
+// 1. 行程視圖 (加入 12/25 聖誕特別標示)
 function ItineraryView({ user }) {
   const [plans, setPlans] = useState({});
   const [items, setItems] = useState([]);
@@ -333,26 +393,48 @@ function ItineraryView({ user }) {
     }
   };
 
+  // 判斷是否為聖誕節 (Day 3 -> 12/25)
+  const isChristmas = DATES[activeDay].includes("12/25");
+
   return (
     <div className="space-y-4">
       <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-        {DATES.map((d, i) => (
-            <button key={i} onClick={()=>setActiveDay(i)} className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeDay===i ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-500'}`}>{d.split(' ')[0]}</button>
-        ))}
+        {DATES.map((d, i) => {
+            const isXmas = d.includes("12/25");
+            return (
+                <button key={i} onClick={()=>setActiveDay(i)} className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${activeDay===i ? 'bg-white text-black border-white' : 'bg-zinc-800 text-zinc-500 border-transparent'} ${isXmas ? 'ring-1 ring-red-500/50' : ''}`}>
+                    {d.split(' ')[0]} {isXmas && '🎄'}
+                </button>
+            )
+        })}
       </div>
-      <div className="bg-zinc-900/50 p-6 rounded-3xl min-h-[400px]">
-        <div className="flex justify-between mb-6">
-            <h3 className="text-xl font-bold text-white">{DATES[activeDay]}</h3>
-            <button onClick={()=>setIsAdding(true)} className="bg-blue-500 text-white p-2 rounded-full"><Plus size={16}/></button>
+      
+      {/* 行程列表容器 */}
+      <div className={`bg-zinc-900/50 p-6 rounded-3xl min-h-[400px] relative overflow-hidden ${isChristmas ? 'border border-red-500/20' : ''}`}>
+        
+        {/* 聖誕節背景裝飾 */}
+        {isChristmas && (
+            <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                <Gift size={120} className="text-red-500" />
+            </div>
+        )}
+
+        <div className="flex justify-between mb-6 relative z-10">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                {DATES[activeDay]}
+                {isChristmas && <span className="text-xs bg-red-600 text-white px-2 py-1 rounded-full animate-pulse">Merry Christmas!</span>}
+            </h3>
+            <button onClick={()=>setIsAdding(true)} className="bg-emerald-600 text-white p-2 rounded-full shadow-lg shadow-emerald-600/20"><Plus size={16}/></button>
         </div>
-        <div className="space-y-4 relative pl-2">
+
+        <div className="space-y-4 relative pl-2 z-10">
             {items.length > 0 && <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-zinc-800"></div>}
             {items.map(item => {
                 const style = getItemStyle(item.type);
                 return (
                     <div key={item.id} className="relative flex gap-4 items-start">
                         <div className={`z-10 w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ring-4 ring-black bg-${style.color}`}></div>
-                        <div className={`flex-1 rounded-xl p-3 border ${style.bg} border-${style.border}`}>
+                        <div className={`flex-1 rounded-xl p-3 border ${style.bg} border-${style.border} backdrop-blur-sm`}>
                             <div className="flex justify-between">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1"><span className="text-[10px] text-zinc-400 font-mono">{item.time}</span>{style.icon}</div>
@@ -368,16 +450,19 @@ function ItineraryView({ user }) {
         </div>
       </div>
       <ConfirmModal isOpen={!!deleteTargetId} onClose={()=>setDeleteTargetId(null)} onConfirm={confirmDeleteActivity} title="移除行程？" message="確定要刪除嗎？" />
+      
+      {/* 新增行程 Modal */}
       {isAdding && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-[80]">
-            <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-3xl border border-white/10">
-                <h3 className="text-white font-bold mb-4">新增行程</h3>
-                <input type="time" value={newTime} onChange={e=>setNewTime(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3" />
-                <input type="text" placeholder="活動內容" value={newTitle} onChange={e=>setNewTitle(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3" />
-                <input type="text" placeholder="備註 (選填)" value={newNote} onChange={e=>setNewNote(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-4" />
-                <div className="flex gap-3">
+            <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-3xl border border-white/10 relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 text-emerald-900/20"><TreePine size={150} /></div>
+                <h3 className="text-white font-bold mb-4 relative z-10">新增行程</h3>
+                <input type="time" value={newTime} onChange={e=>setNewTime(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3 relative z-10" />
+                <input type="text" placeholder="活動內容" value={newTitle} onChange={e=>setNewTitle(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3 relative z-10" />
+                <input type="text" placeholder="備註 (選填)" value={newNote} onChange={e=>setNewNote(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-4 relative z-10" />
+                <div className="flex gap-3 relative z-10">
                     <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-zinc-400">取消</button>
-                    <button onClick={handleAdd} className="flex-1 bg-blue-500 text-white rounded-xl">新增</button>
+                    <button onClick={handleAdd} className="flex-1 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/20">新增</button>
                 </div>
             </div>
         </div>
@@ -386,7 +471,7 @@ function ItineraryView({ user }) {
   );
 }
 
-// 2. 助手視圖 (交通、翻譯、防災、天氣)
+// 2. 助手視圖
 function AssistantView() {
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -402,12 +487,12 @@ function TrafficBoard() {
     return (
         <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-lg relative">
             <div className="bg-black/50 p-3 border-b border-zinc-700 flex justify-between items-center">
-                <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2"><Train size={16} className="text-green-400"/> 關鍵列車</h3>
+                <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2"><Train size={16} className="text-emerald-400"/> 關鍵列車</h3>
                 <span className="text-[10px] text-zinc-500 font-mono animate-pulse">LIVE</span>
             </div>
             <div className="p-4 space-y-3 font-mono text-sm">
-                <div className="flex justify-between"><span>Hakutaka 554</span><span className="text-green-400 bg-green-400/10 px-2 rounded text-xs">正常</span></div>
-                <div className="flex justify-between"><span>Hida 6</span><span className="text-green-400 bg-green-400/10 px-2 rounded text-xs">正常</span></div>
+                <div className="flex justify-between"><span>Hakutaka 554</span><span className="text-emerald-400 bg-emerald-400/10 px-2 rounded text-xs">正常</span></div>
+                <div className="flex justify-between"><span>Hida 6</span><span className="text-emerald-400 bg-emerald-400/10 px-2 rounded text-xs">正常</span></div>
             </div>
             <a href="https://trafficinfo.westjr.co.jp/hokuriku.html" target="_blank" className="block w-full text-center bg-zinc-800/50 py-2 text-xs text-blue-400 border-t border-zinc-700">JR 運行情報</a>
         </div>
@@ -419,7 +504,7 @@ function Phrasebook() {
     return (
         <>
         <div>
-            <h3 className="text-white font-bold mb-3 flex items-center gap-2"><Languages size={18} className="text-purple-400"/> 翻譯指差卡</h3>
+            <h3 className="text-white font-bold mb-3 flex items-center gap-2"><Languages size={18} className="text-amber-400"/> 翻譯指差卡</h3>
             <div className="grid grid-cols-2 gap-3">
                 {PHRASES.map((p, idx) => (
                     <button key={idx} onClick={() => setActivePhrase(p)} className="bg-zinc-800/60 border border-white/5 p-4 rounded-2xl text-left hover:bg-zinc-700 transition-all active:scale-95">
@@ -449,8 +534,8 @@ function SafetyCard() {
         <div className="bg-red-900/10 border border-red-500/20 p-5 rounded-3xl">
             <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2"><ShieldAlert size={18}/> 緊急求助</h3>
             <div className="flex gap-3">
-                <a href="tel:110" className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-center text-xl">110</a>
-                <a href="tel:119" className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-center text-xl">119</a>
+                <a href="tel:110" className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black text-center text-xl shadow-lg shadow-red-600/20">110</a>
+                <a href="tel:119" className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black text-center text-xl shadow-lg shadow-red-600/20">119</a>
             </div>
             <div className="mt-4 pt-4 border-t border-red-500/20">
                 <ExternalLinkItem title="Google 避難所" desc="尋找最近避難點" url="https://www.google.com/maps/search/evacuation+shelter" color="zinc" />
@@ -459,7 +544,7 @@ function SafetyCard() {
     );
 }
 
-// 3. 天氣視圖 (更新版：下雪機率)
+// 3. 天氣視圖
 function WeatherView() {
     const [weather, setWeather] = useState({});
     
@@ -495,7 +580,7 @@ function WeatherView() {
     return (
         <div className="space-y-3">
              <h3 className="text-white font-bold flex items-center gap-2">
-                <CloudSnow size={18} className="text-cyan-400"/> 天氣預報 & 下雪機率
+                <CloudSnow size={18} className="text-sky-400"/> 天氣預報 & 下雪機率
              </h3>
              {CITIES.map(city => {
                  const w = weather[city.name];
@@ -505,9 +590,9 @@ function WeatherView() {
                  
                  return (
                      <div key={city.name} className="bg-zinc-900/40 p-4 rounded-2xl flex justify-between items-center border border-white/5 relative overflow-hidden">
-                         {isSnowing && <div className="absolute inset-0 bg-blue-500/5 pointer-events-none"></div>}
+                         {isSnowing && <div className="absolute inset-0 bg-sky-500/5 pointer-events-none"></div>}
                          <div className="flex items-center gap-4 z-10">
-                             <div className={`p-2 rounded-full ${isSnowing ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                             <div className={`p-2 rounded-full ${isSnowing ? 'bg-sky-500/20 text-sky-300' : 'bg-zinc-800 text-zinc-400'}`}>
                                 {isSnowing ? <CloudSnow size={20} /> : <Sun size={20} />}
                              </div>
                              <div>
@@ -515,7 +600,7 @@ function WeatherView() {
                                  <div className="flex items-center gap-3 text-xs mt-1">
                                     <span className="text-zinc-500 flex items-center gap-1"><CloudRain size={10}/> {w.pop}%</span>
                                     {w.snow > 0 ? (
-                                        <span className="text-cyan-400 font-bold flex items-center gap-1"><Sparkles size={10}/> 積雪 {w.snow}cm</span>
+                                        <span className="text-sky-400 font-bold flex items-center gap-1"><Sparkles size={10}/> 積雪 {w.snow}cm</span>
                                     ) : (
                                         <span className="text-zinc-600">無積雪</span>
                                     )}
@@ -533,7 +618,7 @@ function WeatherView() {
     );
 }
 
-// 4. 記帳視圖
+// 4. 記帳視圖 (配色微調)
 function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -590,16 +675,17 @@ function ExpensesView({ user, ocrReady }) {
 
   return (
     <div className="space-y-6">
-       <div className="bg-gradient-to-br from-emerald-900 to-teal-900 border border-emerald-500/20 p-8 rounded-[2rem] shadow-2xl relative">
-            <p className="text-emerald-400/80 text-xs font-mono uppercase mb-1">總支出</p>
+       <div className="bg-gradient-to-br from-amber-600 to-red-700 border border-amber-500/20 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-20"><Gift size={80} /></div>
+            <p className="text-amber-200/80 text-xs font-mono uppercase mb-1">總支出</p>
             <h2 className="text-4xl font-black text-white font-mono">¥ {total.toLocaleString()}</h2>
             <CreditCard className="absolute -bottom-6 -right-6 text-white/10 w-32 h-32" />
        </div>
        <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[2rem] space-y-4">
-           <div className="flex justify-between"><h3 className="text-white font-bold">新增消費</h3><button onClick={handleSmartScan} disabled={!imagePreview||!ocrReady} className="text-cyan-400 text-xs flex items-center gap-1"><ScanLine size={12}/> OCR</button></div>
+           <div className="flex justify-between"><h3 className="text-white font-bold">新增消費</h3><button onClick={handleSmartScan} disabled={!imagePreview||!ocrReady} className="text-amber-400 text-xs flex items-center gap-1"><ScanLine size={12}/> OCR</button></div>
            <div onClick={() => fileInputRef.current.click()} className="h-24 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer relative overflow-hidden">
                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>收據</span></div>}
-               {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-cyan-400 text-xs">分析中...</div>}
+               {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
            </div>
            <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
            <div className="flex gap-2">
@@ -612,7 +698,7 @@ function ExpensesView({ user, ocrReady }) {
            {expenses.map(item => (
                <div key={item.id} className="flex justify-between items-center bg-zinc-900/60 p-4 rounded-xl border border-white/5">
                    <div className="flex gap-3 items-center">
-                       <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">{item.hasImage?<ImageIcon size={14}/>:<CreditCard size={14}/>}</div>
+                       <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">{item.hasImage?<ImageIcon size={14}/>:<CreditCard size={14}/>}</div>
                        <div><div className="text-white text-sm font-bold">{item.description}</div><div className="text-xs text-zinc-500">{item.date}</div></div>
                    </div>
                    <div className="flex items-center gap-3">
@@ -651,7 +737,8 @@ function CollectionView({ user }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newImage, setNewImage] = useState(null);
   const [title, setTitle] = useState('');
-  const [tag, setTag] = useState('美食');
+  const [tag, setTag] = useState('小物'); 
+  const [isSticker, setIsSticker] = useState(false); // 新增貼紙狀態
   const fileInputRef = useRef(null);
   const [showMemoir, setShowMemoir] = useState(false);
 
@@ -670,15 +757,21 @@ function CollectionView({ user }) {
       const base64 = await blobToBase64(compressed);
       setNewImage(base64);
       setIsAdding(true);
+      setIsSticker(false); // 預設關閉貼紙模式
     }
   };
 
   const saveItem = async () => {
     if (!newImage || !title) return;
     await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'collection'), {
-      image: newImage, title, tag, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW')
+      image: newImage, 
+      title, 
+      tag, 
+      isSticker, // 儲存是否為貼紙
+      createdAt: serverTimestamp(), 
+      date: new Date().toLocaleDateString('zh-TW')
     });
-    setIsAdding(false); setNewImage(null); setTitle('');
+    setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
   };
 
   const deleteItem = async (id) => {
@@ -690,36 +783,116 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"><Camera size={20} /> 拍攝新發現</button>
-        <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-2xl border border-white/5 text-zinc-400 hover:text-white"><Share size={20} /></button>
+        <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 border border-white/20">
+            <Camera size={20} /> 採集小物
+        </button>
+        <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-2xl border border-white/5 text-zinc-400 hover:text-white transition-colors"><Share size={20} /></button>
       </div>
       <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleCapture} />
+      
       <div className="grid grid-cols-2 gap-3">
         {items.map(item => (
-            <div key={item.id} className="bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden relative group">
-                <img src={item.image} className="w-full h-32 object-cover" />
-                <div className="p-3"><div className="text-[10px] text-amber-500 font-bold mb-1 uppercase">{item.tag}</div><div className="text-sm font-bold text-white truncate">{item.title}</div><div className="text-[10px] text-zinc-500 mt-1">{item.date}</div></div>
-                <button onClick={() => deleteItem(item.id)} className="absolute top-2 right-2 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100"><X size={12}/></button>
+            <div key={item.id} className={`relative group transition-all duration-300 ${item.isSticker ? 'bg-transparent p-2' : 'bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden'}`}>
+                {/* 貼紙模式 vs 普通照片模式的渲染差異 */}
+                <div className={`w-full aspect-square object-cover relative ${item.isSticker ? 'rounded-full border-4 border-white shadow-[0_8px_16px_rgba(0,0,0,0.5)] overflow-hidden scale-95' : ''}`}>
+                    <img src={item.image} className="w-full h-full object-cover" />
+                    {item.isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none rounded-full"></div>}
+                </div>
+                
+                <div className={`mt-2 ${item.isSticker ? 'text-center' : 'p-3'}`}>
+                    <div className={`text-[10px] font-bold mb-0.5 uppercase tracking-wider ${item.isSticker ? 'text-white bg-black/50 px-2 py-0.5 rounded-full inline-block backdrop-blur-sm' : 'text-sky-500'}`}>{item.tag}</div>
+                    <div className="text-sm font-bold text-white truncate drop-shadow-md">{item.title}</div>
+                    {!item.isSticker && <div className="text-[10px] text-zinc-500 mt-1">{item.date}</div>}
+                </div>
+
+                <button onClick={() => deleteItem(item.id)} className="absolute top-0 right-0 m-2 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={12}/></button>
             </div>
         ))}
       </div>
+
+      {/* 新增/編輯 Modal */}
       {isAdding && (
-          <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-6">
-              <div className="w-full max-w-sm bg-zinc-900 rounded-3xl p-6 border border-white/10">
-                  <h3 className="text-white font-bold mb-4">加入圖鑑</h3>
-                  <img src={newImage} className="w-full h-48 object-cover rounded-xl mb-4 border border-white/10" />
-                  <input type="text" placeholder="名稱" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3" />
-                  <div className="flex gap-2 mb-4">
-                      {['美食', '風景', '小物', '紀念'].map(t => (
-                          <button key={t} onClick={()=>setTag(t)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tag===t ? 'bg-amber-500 text-black border-amber-500' : 'bg-transparent text-zinc-500 border-zinc-700'}`}>{t}</button>
+          <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in">
+              <div className="w-full max-w-sm bg-zinc-900 rounded-3xl p-6 border border-white/10 shadow-2xl relative overflow-hidden">
+                  <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                      {isSticker ? <Sparkles size={18} className="text-yellow-400"/> : <ImageIcon size={18}/>} 
+                      {isSticker ? '製作小物貼紙' : '加入圖鑑'}
+                  </h3>
+                  
+                  {/* 圖片預覽區域：根據模式改變形狀 */}
+                  <div className="flex justify-center mb-6 relative">
+                      <div className={`relative transition-all duration-500 ${isSticker ? 'w-48 h-48 rounded-full border-4 border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'w-full h-48 rounded-xl border border-white/10' } overflow-hidden`}>
+                          <img src={newImage} className="w-full h-full object-cover" />
+                          {isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none"></div>}
+                      </div>
+                  </div>
+
+                  {/* 切換模式按鈕 */}
+                  <div className="flex gap-2 mb-4 bg-zinc-800 p-1 rounded-xl">
+                      <button onClick={()=>setIsSticker(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isSticker ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500'}`}>原圖</button>
+                      <button onClick={()=>setIsSticker(true)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${isSticker ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-black shadow' : 'text-zinc-500'}`}><Sparkles size={10}/> 貼紙模式</button>
+                  </div>
+
+                  <input type="text" placeholder="物品名稱" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white mb-3 focus:border-sky-500 outline-none transition-colors" />
+                  
+                  <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+                      {['小物', '美食', '風景', '紀念'].map(t => (
+                          <button key={t} onClick={()=>setTag(t)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${tag===t ? 'bg-sky-500 text-white border-sky-500' : 'bg-transparent text-zinc-500 border-zinc-700'}`}>{t}</button>
                       ))}
                   </div>
-                  <div className="flex gap-3"><button onClick={() => setIsAdding(false)} className="flex-1 py-3 text-zinc-400">取消</button><button onClick={saveItem} disabled={!title} className="flex-1 bg-amber-500 text-black rounded-xl font-bold">儲存</button></div>
+
+                  <div className="flex gap-3">
+                      <button onClick={() => setIsAdding(false)} className="flex-1 py-3 text-zinc-400 font-bold">取消</button>
+                      <button onClick={saveItem} disabled={!title} className={`flex-1 rounded-xl font-bold text-white transition-all ${!title ? 'bg-zinc-800 text-zinc-600' : 'bg-sky-500 shadow-lg shadow-sky-500/20'}`}>儲存</button>
+                  </div>
               </div>
           </div>
       )}
     </div>
   );
+}
+
+function MemoirPreview({ items, onClose }) {
+    return (
+        <div className="fixed inset-0 bg-black z-[90] overflow-y-auto p-4 animate-in slide-in-from-bottom">
+            <div className="max-w-md mx-auto bg-white text-black min-h-screen rounded-3xl p-8 relative">
+                <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                <div className="flex justify-between items-start mb-2">
+                    <h1 className="text-4xl font-black tracking-tighter">COLLECTION</h1>
+                </div>
+                <h2 className="text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
+                    Winter 2025 <Sparkles size={16} />
+                </h2>
+                
+                <div className="grid grid-cols-2 gap-x-4 gap-y-8">
+                    {items.map((item) => (
+                        <div key={item.id} className="break-inside-avoid flex flex-col items-center">
+                            {/* 根據是否為貼紙，改變預覽樣式 */}
+                            {item.isSticker ? (
+                                <div className="w-32 h-32 rounded-full border-[6px] border-gray-200 shadow-xl overflow-hidden mb-3 relative transform hover:scale-105 transition-transform duration-500">
+                                    <img src={item.image} className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/40 pointer-events-none"></div>
+                                </div>
+                            ) : (
+                                <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100 shadow-md transform hover:rotate-1 transition-transform duration-500">
+                                    <img src={item.image} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" />
+                                </div>
+                            )}
+                            
+                            <div className="text-center">
+                                <span className="font-bold text-sm block">{item.title}</span>
+                                <span className="text-[10px] font-mono text-gray-400">{item.date}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
+                    HOKURIKU TRIP MEMORY
+                </div>
+            </div>
+        </div>
+    );
 }
 
 function DiaryView({ user }) {
@@ -752,7 +925,7 @@ function DiaryView({ user }) {
   );
 }
 
-// 6. 任務視圖 (更新版：拍照上傳)
+// 6. 任務視圖
 function MissionsView({ user }) {
   const [missionData, setMissionData] = useState({});
   const [activeMissionId, setActiveMissionId] = useState(null);
@@ -828,12 +1001,12 @@ function MissionsView({ user }) {
             const hasImage = !!data?.image;
 
             return (
-                <div key={m.id} className={`rounded-2xl border transition-all overflow-hidden ${isCompleted ? 'bg-zinc-900/80 border-amber-500/50' : 'bg-zinc-900 border-white/5'}`}>
+                <div key={m.id} className={`rounded-2xl border transition-all overflow-hidden ${isCompleted ? 'bg-zinc-900/80 border-emerald-500/50' : 'bg-zinc-900 border-white/5'}`}>
                     <div className="p-4 flex justify-between items-start">
                         <div className="flex gap-4">
                             <div className="mt-1 text-2xl filter drop-shadow-lg">{m.icon}</div>
                             <div>
-                                <div className={`font-bold text-lg ${isCompleted ? 'text-amber-400' : 'text-zinc-200'}`}>{m.title}</div>
+                                <div className={`font-bold text-lg ${isCompleted ? 'text-emerald-400' : 'text-zinc-200'}`}>{m.title}</div>
                                 <div className="text-xs text-zinc-500 mb-1">{m.desc}</div>
                                 <div className="flex items-center gap-1 text-[10px] text-zinc-400">
                                     <MapPin size={10}/> {m.location}
@@ -859,7 +1032,7 @@ function MissionsView({ user }) {
                         <div className="relative h-48 w-full mt-2 group">
                             <img src={data.image} className="w-full h-full object-cover opacity-90" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-4">
-                                <span className="text-amber-400 text-xs font-bold font-mono flex items-center gap-2 border border-amber-400/30 bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
+                                <span className="text-emerald-400 text-xs font-bold font-mono flex items-center gap-2 border border-emerald-400/30 bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
                                     <Trophy size={12}/> MISSION COMPLETED
                                 </span>
                             </div>
@@ -871,26 +1044,3 @@ function MissionsView({ user }) {
     </div>
   );
 }
-
-function MemoirPreview({ items, onClose }) {
-    return (
-        <div className="fixed inset-0 bg-black z-[90] overflow-y-auto p-4 animate-in slide-in-from-bottom">
-            <div className="max-w-md mx-auto bg-white text-black min-h-screen rounded-3xl p-8 relative">
-                <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 p-2 rounded-full"><X size={20}/></button>
-                <h1 className="text-4xl font-black mb-2 tracking-tighter">HOKURIKU</h1>
-                <h2 className="text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest">Winter Memoir 2025</h2>
-                <div className="space-y-8">
-                    {items.map((item) => (
-                        <div key={item.id} className="break-inside-avoid">
-                            <div className="aspect-[4/3] w-full overflow-hidden rounded-xl mb-3 bg-gray-100"><img src={item.image} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" /></div>
-                            <div className="flex justify-between items-baseline border-b-2 border-black pb-2 mb-2"><span className="font-bold text-lg">{item.title}</span><span className="text-xs font-mono text-gray-400">{item.date}</span></div>
-                            <div className="flex gap-2"><span className="text-[10px] bg-black text-white px-2 py-0.5 rounded-full">{item.tag}</span></div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-
