@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Image
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -34,7 +34,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-hokuriku-trip';
 
-// --- 資料常數 ---
+// --- 資料常數 (保持不變) ---
 const DATES = [
   "12/22 (一)", "12/23 (二)", "12/24 (三)", "12/25 (四)", 
   "12/26 (五)", "12/27 (六)", "12/28 (日)", "12/29 (一)"
@@ -110,29 +110,28 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- [關鍵修正] 針對 iPhone 內存的極限壓縮 ---
+// --- 圖片處理 ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
+    // 雙重保險：如果不是圖片，直接 reject
+    if (!file.type.startsWith('image/')) {
+        reject(new Error("Not an image"));
+        return;
+    }
+
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.src = objectUrl;
     
     img.onload = () => {
-      // 1. 強制將圖片縮小到 800px 以下，確保不會爆內存
       const MAX_SIZE = 800; 
       let width = img.width;
       let height = img.height;
       
       if (width > height) {
-        if (width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
-        }
+        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
       } else {
-        if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
-        }
+        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
       }
       
       const canvas = document.createElement('canvas');
@@ -141,43 +140,23 @@ const compressImage = (file) => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
       
-      // 2. 直接轉換為 Base64 字串，品質設為 0.5 (中等畫質，體積小)
-      // 使用 try-catch 攔截可能的 canvas 錯誤
       try {
-          const base64 = canvas.toDataURL('image/jpeg', 0.5);
-          
-          // 3. 簡單檢查：如果字串長度超過 90萬字元 (約 650KB)，就認定可能上傳失敗
-          // 雖然犧牲畫質，但在無後端儲存的情況下這是唯一解法
-          if (base64.length > 900000) {
-              // 再壓縮一次
-              const q = 0.3;
-              const tinyBase64 = canvas.toDataURL('image/jpeg', q);
-              resolve(tinyBase64);
-          } else {
-              resolve(base64);
-          }
+          // 品質降至 0.6
+          const base64 = canvas.toDataURL('image/jpeg', 0.6);
+          resolve(base64);
       } catch (e) {
           reject(e);
       } finally {
           URL.revokeObjectURL(objectUrl);
       }
     };
-    
-    img.onerror = (e) => {
-        URL.revokeObjectURL(objectUrl);
-        reject(e);
-    };
+    img.onerror = (e) => { URL.revokeObjectURL(objectUrl); reject(e); };
   });
 };
 
-// 這次移除了 blobToBase64，因為 compressImage 直接回傳 base64，減少轉換步驟避免當機
-
 const loadScript = (src) => {
     return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) {
-            resolve();
-            return;
-        }
+        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
         const script = document.createElement('script');
         script.src = src;
         script.onload = resolve;
@@ -210,7 +189,7 @@ const SnowOverlay = () => {
     const flakes = Array.from({ length: 20 }).map((_, i) => ({
         id: i,
         left: Math.random() * 100 + 'vw',
-        animationDuration: (Math.random() * 5 + 5) + 's', // 5-10s
+        animationDuration: (Math.random() * 5 + 5) + 's',
         animationDelay: (Math.random() * 5) + 's',
         opacity: Math.random() * 0.5 + 0.3,
         size: Math.random() * 10 + 5 + 'px'
@@ -236,13 +215,12 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl scale-100 animate-in zoom-in-95 ring-1 ring-white/10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-10"><Gift size={60} /></div>
+      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl relative overflow-hidden">
         <h3 className="font-bold text-white text-lg mb-2 relative z-10">{title}</h3>
         <p className="text-zinc-400 text-sm mb-6 leading-relaxed relative z-10">{message}</p>
         <div className="flex gap-3 relative z-10">
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl font-bold text-zinc-400 bg-white/5 hover:bg-white/10 transition-colors">取消</button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20 transition-colors">確認</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-2xl font-bold text-zinc-400 bg-white/5">取消</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl font-bold text-white bg-red-600">確認</button>
         </div>
       </div>
     </div>
@@ -267,7 +245,7 @@ function ExternalLinkItem({ title, desc, url, color }) {
                 <div className={`font-bold text-sm group-hover:underline ${color === 'blue' ? 'text-blue-400' : 'text-zinc-200'}`}>{title}</div>
                 <div className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">{desc}</div>
             </div>
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white group-hover:bg-white/10 transition-colors"><ExternalLink size={14} /></div>
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white"><ExternalLink size={14} /></div>
         </a>
     );
 }
@@ -614,8 +592,6 @@ function ExpensesView({ user, ocrReady }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expenses, setExpenses] = useState([]);
-  const fileInputRef = useRef(null);
-  const fileRef = useRef(null);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   useEffect(() => {
@@ -627,21 +603,19 @@ function ExpensesView({ user, ocrReady }) {
     });
   }, [user]);
 
+  // [重點修正] Native Label Trigger
   const handleFileChange = async (e) => {
       const file = e.target.files?.[0];
       if (file) {
-          // 這裡也需要壓縮，避免 OCR 圖片太大上傳失敗
           try {
               const b64 = await compressImage(file);
-              setImagePreview(b64); // 直接用 base64 顯示
-              // fileRef.current = file; // 舊的
-              // 為了 OCR，我們需要將 base64 轉回 blob 或者直接用
-              // 簡化起見，直接用 compressImage 回傳的 base64
+              setImagePreview(b64); 
           } catch(e) {
               console.error(e);
+              alert("圖片讀取失敗，請重試");
           }
       }
-      e.target.value = '';
+      e.target.value = ''; // Reset input
   };
 
   const handleSmartScan = async () => {
@@ -649,7 +623,6 @@ function ExpensesView({ user, ocrReady }) {
     setIsAnalyzing(true);
     try {
       if (!window.Tesseract) throw new Error("OCR loading...");
-      // imagePreview 已經是壓縮過的 Base64，直接傳給 Tesseract
       const { data: { text } } = await window.Tesseract.recognize(imagePreview, 'eng');
       const numbers = text.match(/(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?/g);
       if (numbers) {
@@ -681,12 +654,16 @@ function ExpensesView({ user, ocrReady }) {
        </div>
        <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[2rem] space-y-4">
            <div className="flex justify-between"><h3 className="text-white font-bold">新增消費</h3><button onClick={handleSmartScan} disabled={!imagePreview||!ocrReady} className="text-amber-400 text-xs flex items-center gap-1"><ScanLine size={12}/> OCR</button></div>
-           <div onClick={() => fileInputRef.current.click()} className="h-24 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer relative overflow-hidden">
-               {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>收據</span></div>}
+           
+           {/* [重點修正] 改用 Label 包裹，這是 iPhone 唯一認可的方式 */}
+           <label className="h-24 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer relative overflow-hidden hover:border-amber-500/50 transition-colors">
+               {/* 真正的 input 藏在裡面，但不能 display:none */}
+               <input type="file" accept="image/*" onChange={handleFileChange} style={{opacity: 0, width: 0, height: 0, position: 'absolute'}} />
+               
+               {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>拍收據</span></div>}
                {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
-           </div>
-           {/* [關鍵修正]：讓 iPhone 能點擊 */}
-           <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileChange} />
+           </label>
+
            <div className="flex gap-2">
                <input type="number" placeholder="¥" value={amount} onChange={e=>setAmount(e.target.value)} className="w-1/3 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
                <input type="text" placeholder="品項" value={description} onChange={e=>setDescription(e.target.value)} className="flex-1 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
@@ -738,7 +715,6 @@ function CollectionView({ user }) {
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
   const [isSticker, setIsSticker] = useState(false);
-  const fileInputRef = useRef(null);
   const [showMemoir, setShowMemoir] = useState(false);
 
   useEffect(() => {
@@ -750,30 +726,24 @@ function CollectionView({ user }) {
     });
   }, [user]);
 
+  // [重點修正] 改用 Native Label
   const handleCapture = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsProcessing(true);
       try {
-        // [關鍵修正] 直接回傳 Base64 字串
         const base64 = await compressImage(file);
         setNewImage(base64);
         setIsAdding(true);
         setIsSticker(false); 
       } catch (error) {
-        console.error("Image processing error:", error);
-        alert("圖片處理失敗，請重試");
+        console.error(error);
+        alert("圖片處理失敗: " + error.message);
       } finally {
         setIsProcessing(false);
       }
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const triggerCamera = () => {
-      if(fileInputRef.current) {
-          fileInputRef.current.click();
-      }
+    e.target.value = ''; // Reset
   };
 
   const saveItem = async () => {
@@ -784,8 +754,7 @@ function CollectionView({ user }) {
         });
         setIsAdding(false); setNewImage(null); setTitle(''); setIsSticker(false);
     } catch(e) {
-        alert("存檔失敗: 圖片仍然過大，建議使用「截圖」後再上傳");
-        console.error(e);
+        alert("存檔失敗: 檔案可能太大，請重試");
     }
   };
 
@@ -798,17 +767,21 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={triggerCamera} disabled={isProcessing} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform">
-            {isProcessing ? <Loader2 className="animate-spin"/> : <Camera size={18} />} 
-            {isProcessing ? '照片處理中...' : '拍攝新發現'}
-        </button>
+        {/* [重點修正] 這是核心修改：將按鈕變成 Label */}
+        {isProcessing ? (
+             <div className="flex-1 bg-zinc-800 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm cursor-wait">
+                <Loader2 className="animate-spin" size={18}/> 處理中...
+             </div>
+        ) : (
+            <label className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform cursor-pointer">
+                <input type="file" accept="image/*" onChange={handleCapture} style={{opacity: 0, width: 0.1, height: 0.1, position: 'absolute'}} />
+                <Camera size={18} /> 拍攝新發現
+            </label>
+        )}
+        
         <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       
-      {/* 修正 input 屬性以相容 iPhone */}
-      <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleCapture} />
-      
-      {/* 3欄緊湊佈局 */}
       <div className="grid grid-cols-3 gap-1.5">
         {items.map(item => (
             <div key={item.id} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden'}`}>
@@ -991,7 +964,6 @@ function DiaryView({ user }) {
 function MissionsView({ user }) {
   const [missionData, setMissionData] = useState({});
   const [activeMissionId, setActiveMissionId] = useState(null);
-  const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -1003,30 +975,23 @@ function MissionsView({ user }) {
     });
   }, [user]);
 
-  const handleCameraClick = (missionId) => {
-      setActiveMissionId(missionId);
-      if(fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleFileChange = async (e) => {
+  // [重點修正] 改用 Native Label
+  const handleFileChange = async (e, missionId) => {
       const file = e.target.files[0];
-      if (!file || !activeMissionId) return;
+      if (!file) return;
 
       setUploading(true);
       try {
           const compressed = await compressImage(file);
-          // 任務圖片也需要壓縮後的 base64
-          // 這裡 compressImage 已經回傳 base64 字串
-          
-          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', activeMissionId), { 
+          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', missionId), { 
               completed: true, 
-              image: compressed, // 直接存
+              image: compressed,
               completedAt: serverTimestamp()
           }, { merge: true });
           
       } catch (error) {
-          console.error("Upload failed", error);
-          alert("上傳失敗");
+          console.error(error);
+          alert("上傳失敗: " + error.message);
       } finally {
           setUploading(false);
           setActiveMissionId(null);
@@ -1041,14 +1006,6 @@ function MissionsView({ user }) {
 
   return (
     <div className="space-y-4 pb-20">
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            accept="image/*" 
-            className="hidden" 
-            onChange={handleFileChange} 
-        />
-
         {uploading && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
                 <div className="bg-zinc-900 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
@@ -1081,12 +1038,10 @@ function MissionsView({ user }) {
                                 <Trash2 size={18} />
                             </button>
                         ) : (
-                            <button 
-                                onClick={() => handleCameraClick(m.id)}
-                                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 p-3 rounded-xl transition-colors border border-white/5 flex flex-col items-center gap-1 group"
-                            >
+                            <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 p-3 rounded-xl transition-colors border border-white/5 flex flex-col items-center gap-1 group cursor-pointer">
+                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, m.id)} style={{opacity: 0, width: 0.1, height: 0.1, position: 'absolute'}} />
                                 <Camera size={20} className="group-hover:text-white transition-colors"/>
-                            </button>
+                            </label>
                         )}
                     </div>
 
