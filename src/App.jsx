@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -17,7 +17,6 @@ try {
     throw new Error('Environment config not found');
   }
 } catch (e) {
-  // Fallback config (請確保這裡填入你自己的 Firebase 設定，如果環境變數失敗)
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -80,9 +79,11 @@ const DEFAULT_ITINERARY = {
   ]
 };
 
+// [新增] 已經加入高山 (Takayama)
 const CITIES = [
   { name: "金澤 (Kanazawa)", lat: 36.5613, lon: 136.6562 },
   { name: "富山 (Toyama)", lat: 36.6959, lon: 137.2137 },
+  { name: "高山 (Takayama)", lat: 36.1408, lon: 137.2513 }, 
   { name: "高岡 (Takaoka)", lat: 36.7550, lon: 137.0210 },
   { name: "新穗高 (Shinhotaka)", lat: 36.2892, lon: 137.5756 },
   { name: "宇奈月 (Unazuki)", lat: 36.8145, lon: 137.5815 },
@@ -249,7 +250,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('itinerary'); 
   const [ocrReady, setOcrReady] = useState(false);
   
-  // 狀態提升：讓 App 掌控預覽層的顯示，確保層級正確
+  // 狀態提升：讓 App 掌控預覽層的顯示
   const [showMemoir, setShowMemoir] = useState(false);
   const [memoirItems, setMemoirItems] = useState([]);
 
@@ -296,7 +297,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content: z-10 */}
+      {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 pb-32 scroll-smooth scrollbar-hide z-10 relative">
         {!user ? (
           <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-zinc-600" /></div>
@@ -305,20 +306,17 @@ export default function App() {
             {activeTab === 'itinerary' && <ItineraryView user={user} />}
             {activeTab === 'assistant' && <AssistantView />}
             {activeTab === 'wallet' && <ExpensesView user={user} ocrReady={ocrReady} />}
-            {/* 傳遞 setShowMemoir 給 MemoriesView，讓子組件可以打開預覽 */}
             {activeTab === 'memories' && <MemoriesView user={user} setShowMemoir={setShowMemoir} setMemoirItems={setMemoirItems} />}
           </>
         )}
       </main>
 
-      {/* Memoir Preview Layer: z-20 
-          關鍵修改：bottom-28 讓它停在導航列上方，z-20 讓它蓋住 Main (z-10) 但不蓋住 Nav (z-30)
-      */}
+      {/* Memoir Preview Layer */}
       {showMemoir && (
         <MemoirPreview items={memoirItems} onClose={() => setShowMemoir(false)} />
       )}
 
-      {/* Navigation Bar: z-30 */}
+      {/* Navigation Bar */}
       <nav className="absolute bottom-8 left-4 right-4 h-16 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-full z-30 shadow-2xl flex justify-around items-center px-2">
         <NavButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} color="text-red-400" />
         <NavButton icon={<LayoutGrid size={20} />} label="助手" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} color="text-emerald-400" />
@@ -329,7 +327,7 @@ export default function App() {
   );
 }
 
-// --- MemoirPreview Component (調整為卡片樣式) ---
+// --- MemoirPreview Component ---
 function MemoirPreview({ items, onClose }) {
     const [isExporting, setIsExporting] = useState(false);
     const contentRef = useRef(null);
@@ -386,7 +384,6 @@ function MemoirPreview({ items, onClose }) {
 
     return (
         <div className="absolute inset-x-0 top-0 bottom-28 z-20 bg-zinc-900 flex flex-col overflow-hidden rounded-b-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-b border-white/10 animate-in slide-in-from-bottom-10 duration-300">
-            {/* Close Button */}
             <div className="absolute top-4 right-4 z-[50]">
                 <button 
                     onClick={onClose} 
@@ -396,7 +393,6 @@ function MemoirPreview({ items, onClose }) {
                 </button>
             </div>
 
-            {/* Content Area */}
             <div className="flex-1 overflow-y-auto bg-zinc-900 scrollbar-hide">
                 <div ref={contentRef} className="min-h-full w-full bg-white text-black p-6 pb-10">
                     <div className="flex justify-between items-start mb-2 pt-6">
@@ -432,7 +428,6 @@ function MemoirPreview({ items, onClose }) {
                 </div>
             </div>
 
-            {/* Bottom Actions - Stick to the bottom of the card */}
             <div className="shrink-0 bg-zinc-900 border-t border-white/5 p-3 z-50">
                  <div className="flex gap-2">
                      {isExporting ? (
@@ -587,9 +582,38 @@ function AssistantView() {
     return (
         <div className="space-y-6 animate-in fade-in">
              <WeatherView />
+             <LiveCams />
              <TrafficBoard />
              <Phrasebook />
              <SafetyCard />
+        </div>
+    );
+}
+
+// [新增] Live Cams Component
+function LiveCams() {
+    const cams = [
+        { name: '高山 (Takayama)', url: 'https://www.youtube.com/results?search_query=takayama+live+camera', desc: '宮川朝市 / 古街雪況', color: 'bg-amber-500/20 text-amber-400' },
+        { name: '富山 (Toyama)', url: 'https://www.knb.ne.jp/live_camera/', desc: '富山車站 / 市區', color: 'bg-blue-500/20 text-blue-400' },
+        { name: '宇奈月 (Unazuki)', url: 'https://www.kurobe-unazuki.jp/livecam/', desc: '溫泉街 / 峽谷入口', color: 'bg-emerald-500/20 text-emerald-400' },
+    ];
+
+    return (
+        <div className="space-y-3">
+             <h3 className="text-white font-bold flex items-center gap-2">
+                <MonitorPlay size={18} className="text-red-400"/> LIVE CAM 即時影像
+             </h3>
+             <div className="grid grid-cols-3 gap-3">
+                 {cams.map((cam, i) => (
+                     <a key={i} href={cam.url} target="_blank" rel="noopener noreferrer" className="bg-zinc-900 border border-white/10 rounded-xl p-3 flex flex-col items-center text-center hover:bg-zinc-800 transition-colors group">
+                         <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${cam.color}`}>
+                             <Video size={16} />
+                         </div>
+                         <div className="text-xs font-bold text-white mb-1 group-hover:underline">{cam.name}</div>
+                         <div className="text-[9px] text-zinc-500">{cam.desc}</div>
+                     </a>
+                 ))}
+             </div>
         </div>
     );
 }
@@ -826,7 +850,6 @@ function ExpensesView({ user, ocrReady }) {
   );
 }
 
-// 接收 setShowMemoir, setMemoirItems 以便在點擊分享時呼叫
 function MemoriesView({ user, setShowMemoir, setMemoirItems }) {
   const [subTab, setSubTab] = useState('collection'); 
   return (
@@ -898,7 +921,6 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
     if(confirm("移除這張圖鑑卡？")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'collection', id));
   };
 
-  // 打開預覽功能
   const handleOpenPreview = () => {
       setMemoirItems(items);
       setShowMemoir(true);
