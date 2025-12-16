@@ -6,10 +6,9 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 
-// --- API Key ---
+// --- API Key & Firebase Configuration ---
 const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
 
-// --- Firebase 設定 ---
 let firebaseConfig;
 try {
   if (typeof __firebase_config !== 'undefined') {
@@ -34,7 +33,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-hokuriku-trip';
 
-// --- 資料常數 (保持不變) ---
+// --- Constants ---
 const DATES = [
   "12/22 (一)", "12/23 (二)", "12/24 (三)", "12/25 (四)", 
   "12/26 (五)", "12/27 (六)", "12/28 (日)", "12/29 (一)"
@@ -110,38 +109,31 @@ const PHRASES = [
   { jp: 'これをください', romaji: 'Kore wo kudasai', zh: '我要這個 (指)', icon: '👉' },
 ];
 
-// --- 圖片處理 ---
+// --- Helpers ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    // 雙重保險：如果不是圖片，直接 reject
     if (!file.type.startsWith('image/')) {
         reject(new Error("Not an image"));
         return;
     }
-
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.src = objectUrl;
-    
     img.onload = () => {
       const MAX_SIZE = 800; 
       let width = img.width;
       let height = img.height;
-      
       if (width > height) {
         if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
       } else {
         if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
       }
-      
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
-      
       try {
-          // 品質降至 0.6
           const base64 = canvas.toDataURL('image/jpeg', 0.6);
           resolve(base64);
       } catch (e) {
@@ -250,6 +242,7 @@ function ExternalLinkItem({ title, desc, url, color }) {
     );
 }
 
+// --- Main App Component ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('itinerary'); 
@@ -603,7 +596,6 @@ function ExpensesView({ user, ocrReady }) {
     });
   }, [user]);
 
-  // [重點修正] Native Label Trigger
   const handleFileChange = async (e) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -655,11 +647,8 @@ function ExpensesView({ user, ocrReady }) {
        <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[2rem] space-y-4">
            <div className="flex justify-between"><h3 className="text-white font-bold">新增消費</h3><button onClick={handleSmartScan} disabled={!imagePreview||!ocrReady} className="text-amber-400 text-xs flex items-center gap-1"><ScanLine size={12}/> OCR</button></div>
            
-           {/* [重點修正] 改用 Label 包裹，這是 iPhone 唯一認可的方式 */}
            <label className="h-24 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer relative overflow-hidden hover:border-amber-500/50 transition-colors">
-               {/* 真正的 input 藏在裡面，但不能 display:none */}
                <input type="file" accept="image/*" onChange={handleFileChange} style={{opacity: 0, width: 0, height: 0, position: 'absolute'}} />
-               
                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="text-zinc-500 text-xs flex flex-col items-center"><Camera size={16}/> <span>拍收據</span></div>}
                {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
            </label>
@@ -726,7 +715,6 @@ function CollectionView({ user }) {
     });
   }, [user]);
 
-  // [重點修正] 改用 Native Label
   const handleCapture = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -767,7 +755,6 @@ function CollectionView({ user }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        {/* [重點修正] 這是核心修改：將按鈕變成 Label */}
         {isProcessing ? (
              <div className="flex-1 bg-zinc-800 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm cursor-wait">
                 <Loader2 className="animate-spin" size={18}/> 處理中...
@@ -847,11 +834,20 @@ function MemoirPreview({ items, onClose }) {
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
             const element = contentRef.current;
             if (!element) return;
-            const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            
+            // 這裡有個技巧：為了截圖完整，我們暫時解除高度限制，截圖完再恢復 (雖然使用者看不到)
+            const canvas = await window.html2canvas(element, { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                scrollY: -window.scrollY // 修正捲動偏移
+            });
+
+            const dateStr = new Date().toISOString().split('T')[0];
 
             if (type === 'jpg') {
                 const link = document.createElement('a');
-                link.download = `Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.jpg`;
+                link.download = `Hokuriku_Memoir_${dateStr}.jpg`;
                 link.href = canvas.toDataURL('image/jpeg', 0.9);
                 link.click();
             } else if (type === 'pdf') {
@@ -859,6 +855,7 @@ function MemoirPreview({ items, onClose }) {
                 const { jsPDF } = window.jspdf;
                 const imgData = canvas.toDataURL('image/jpeg', 0.9);
                 const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 const imgWidth = canvas.width;
@@ -866,13 +863,14 @@ function MemoirPreview({ items, onClose }) {
                 const ratio = imgWidth / imgHeight;
                 const heightInPdf = pdfWidth / ratio;
 
+                // 如果圖片太長，自動分頁或拉長 PDF (這裡選用拉長頁面更適合手機觀看)
                 if (heightInPdf > pdfHeight) {
                     const longPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, heightInPdf] });
                     longPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
-                    longPdf.save(`Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.pdf`);
+                    longPdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
                 } else {
                     pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
-                    pdf.save(`Hokuriku_Memoir_${new Date().toISOString().split('T')[0]}.pdf`);
+                    pdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
                 }
             }
         } catch (error) {
@@ -884,22 +882,37 @@ function MemoirPreview({ items, onClose }) {
     };
 
     return (
-        // [修正點] 改為 Flex Column 且高度為 100dvh
-        <div className="fixed inset-0 bg-zinc-900 z-[999] flex flex-col h-[100dvh]">
-            {/* Header: Close Button */}
+        // [關鍵修正 1] 使用 fixed inset-0 + z-[999] 確保覆蓋一切
+        // [關鍵修正 2] h-[100dvh] 強制使用裝置可見高度，忽略網址列
+        // [關鍵修正 3] flex-col 將畫面切分為：捲動區 + 底部按鈕區
+        <div className="fixed inset-0 z-[999] bg-zinc-900 flex flex-col h-[100dvh] overflow-hidden">
+            
+            {/* 關閉按鈕：浮動在最右上角，不影響佈局 */}
             <div className="absolute top-4 right-4 z-[1000]">
-                <button onClick={onClose} className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 hover:bg-black/80 transition-colors shadow-lg">
+                <button 
+                    onClick={onClose} 
+                    className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 hover:bg-black/80 transition-colors shadow-lg active:scale-95"
+                >
                     <X size={24}/>
                 </button>
             </div>
 
-            {/* Scrollable Content Area */}
-            <div className="flex-1 overflow-y-auto bg-white relative">
-                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-20 md:p-10">
+            {/* [中間層] 可捲動區域 (Scrollable Area)
+               flex-1: 吃掉除了底部按鈕以外的所有空間
+               overflow-y-auto: 只有這裡會出現捲軸
+               bg-zinc-900: 背景色
+            */}
+            <div className="flex-1 overflow-y-auto bg-zinc-900 w-full relative">
+                {/* 這是我們要截圖的白色紙張區域 */}
+                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-24 md:p-10">
                     <div className="flex justify-between items-start mb-2 pt-8">
                         <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
                     </div>
-                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">Winter 2025 <Sparkles size={16} /></h2>
+                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
+                        Winter 2025 <Sparkles size={16} />
+                    </h2>
+                    
+                    {/* 瀑布流內容 */}
                     <div className="columns-2 gap-4 space-y-4">
                         {items.map((item) => (
                             <div key={item.id} className="break-inside-avoid mb-4 group">
@@ -915,24 +928,37 @@ function MemoirPreview({ items, onClose }) {
                                 )}
                                 <div className="px-1 text-center">
                                     <div className="font-bold text-xs text-zinc-800 leading-tight">{item.title}</div>
-                                    <div className="text-[9px] font-mono text-gray-400 mt-0.5">{item.date.split('/')[1]}/{item.date.split('/')[2]}</div>
+                                    <div className="text-[9px] font-mono text-gray-400 mt-0.5">{item.date?.split('/')[1]}/{item.date?.split('/')[2]}</div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">HOKURIKU TRIP MEMORY</div>
+
+                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
+                        HOKURIKU TRIP MEMORY
+                    </div>
                 </div>
             </div>
 
-            {/* Footer: Static Block (Not Absolute) */}
-            <div className="shrink-0 bg-zinc-900 border-t border-white/10 p-4 pb-8 safe-area-bottom">
+            {/* [底部層] 固定按鈕區 (Fixed Footer)
+                shrink-0: 禁止被壓縮，保證高度
+                z-50: 確保層級最高
+                pb-8: 給 iPhone 底部橫條 (Home Indicator) 留出緩衝區
+            */}
+            <div className="shrink-0 w-full bg-zinc-900 border-t border-white/10 p-4 pb-8 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
                  <div className="flex gap-3 justify-center max-w-lg mx-auto">
                      {isExporting ? (
-                         <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20"><Loader2 className="animate-spin" size={20}/> 輸出中...</div>
+                         <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20">
+                            <Loader2 className="animate-spin" size={20}/> 輸出中...
+                         </div>
                      ) : (
                          <>
-                            <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><ImageIcon size={18}/> 存圖片</button>
-                            <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><FileDown size={18}/> 存 PDF</button>
+                            <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                                <ImageIcon size={18}/> 存圖片
+                            </button>
+                            <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                                <FileDown size={18}/> 存 PDF
+                            </button>
                          </>
                      )}
                 </div>
@@ -985,7 +1011,6 @@ function MissionsView({ user }) {
     });
   }, [user]);
 
-  // [重點修正] 改用 Native Label
   const handleFileChange = async (e, missionId) => {
       const file = e.target.files[0];
       if (!file) return;
