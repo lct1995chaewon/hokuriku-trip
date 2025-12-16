@@ -17,6 +17,7 @@ try {
     throw new Error('Environment config not found');
   }
 } catch (e) {
+  // Fallback config (請確保這裡填入你自己的 Firebase 設定，如果環境變數失敗)
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -247,6 +248,10 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('itinerary'); 
   const [ocrReady, setOcrReady] = useState(false);
+  
+  // 狀態提升：讓 App 掌控預覽層的顯示，確保層級正確
+  const [showMemoir, setShowMemoir] = useState(false);
+  const [memoirItems, setMemoirItems] = useState([]);
 
   useEffect(() => {
     if (window.Tesseract) { setOcrReady(true); return; }
@@ -270,10 +275,13 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-black text-gray-100 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-zinc-800">
       <SnowOverlay />
+      
+      {/* Background Blobs */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full bg-rose-900/20 blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] rounded-full bg-emerald-900/20 blur-[100px]"></div>
       </div>
+
       <header className="bg-black/60 backdrop-blur-xl pt-12 pb-4 px-6 sticky top-0 z-20 border-b border-white/5 relative">
         <div className="flex justify-between items-center">
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 drop-shadow-xl">
@@ -287,6 +295,8 @@ export default function App() {
             </div>
         </div>
       </header>
+
+      {/* Main Content: z-10 */}
       <main className="flex-1 overflow-y-auto p-4 pb-32 scroll-smooth scrollbar-hide z-10 relative">
         {!user ? (
           <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-zinc-600" /></div>
@@ -295,10 +305,20 @@ export default function App() {
             {activeTab === 'itinerary' && <ItineraryView user={user} />}
             {activeTab === 'assistant' && <AssistantView />}
             {activeTab === 'wallet' && <ExpensesView user={user} ocrReady={ocrReady} />}
-            {activeTab === 'memories' && <MemoriesView user={user} />}
+            {/* 傳遞 setShowMemoir 給 MemoriesView，讓子組件可以打開預覽 */}
+            {activeTab === 'memories' && <MemoriesView user={user} setShowMemoir={setShowMemoir} setMemoirItems={setMemoirItems} />}
           </>
         )}
       </main>
+
+      {/* Memoir Preview Layer: z-20 
+          關鍵修改：bottom-28 讓它停在導航列上方，z-20 讓它蓋住 Main (z-10) 但不蓋住 Nav (z-30)
+      */}
+      {showMemoir && (
+        <MemoirPreview items={memoirItems} onClose={() => setShowMemoir(false)} />
+      )}
+
+      {/* Navigation Bar: z-30 */}
       <nav className="absolute bottom-8 left-4 right-4 h-16 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-full z-30 shadow-2xl flex justify-around items-center px-2">
         <NavButton icon={<Calendar size={20} />} label="行程" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} color="text-red-400" />
         <NavButton icon={<LayoutGrid size={20} />} label="助手" active={activeTab === 'assistant'} onClick={() => setActiveTab('assistant')} color="text-emerald-400" />
@@ -308,6 +328,134 @@ export default function App() {
     </div>
   );
 }
+
+// --- MemoirPreview Component (調整為卡片樣式) ---
+function MemoirPreview({ items, onClose }) {
+    const [isExporting, setIsExporting] = useState(false);
+    const contentRef = useRef(null);
+
+    const handleExport = async (type) => {
+        setIsExporting(true);
+        try {
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+            const element = contentRef.current;
+            if (!element) return;
+            
+            const canvas = await window.html2canvas(element, { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff'
+            });
+
+            const dateStr = new Date().toISOString().split('T')[0];
+
+            if (type === 'jpg') {
+                const link = document.createElement('a');
+                link.download = `Hokuriku_Memoir_${dateStr}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            } else if (type === 'pdf') {
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+                const { jsPDF } = window.jspdf;
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+                const heightInPdf = pdfWidth / ratio;
+
+                if (heightInPdf > pdfHeight) {
+                    const longPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, heightInPdf] });
+                    longPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
+                    longPdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
+                } else {
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
+                    pdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
+                }
+            }
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("匯出失敗，請重試");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    return (
+        <div className="absolute inset-x-0 top-0 bottom-28 z-20 bg-zinc-900 flex flex-col overflow-hidden rounded-b-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-b border-white/10 animate-in slide-in-from-bottom-10 duration-300">
+            {/* Close Button */}
+            <div className="absolute top-4 right-4 z-[50]">
+                <button 
+                    onClick={onClose} 
+                    className="bg-black/40 text-white p-2 rounded-full backdrop-blur-md border border-white/10 hover:bg-red-500/80 transition-colors shadow-lg active:scale-95"
+                >
+                    <X size={20}/>
+                </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto bg-zinc-900 scrollbar-hide">
+                <div ref={contentRef} className="min-h-full w-full bg-white text-black p-6 pb-10">
+                    <div className="flex justify-between items-start mb-2 pt-6">
+                        <h1 className="text-3xl font-black tracking-tighter">COLLECTION</h1>
+                    </div>
+                    <h2 className="text-lg font-medium text-gray-500 mb-6 uppercase tracking-widest flex items-center gap-2">
+                        Winter 2025 <Sparkles size={16} />
+                    </h2>
+                    
+                    <div className="columns-2 gap-3 space-y-3">
+                        {items.map((item) => (
+                            <div key={item.id} className="break-inside-avoid mb-3">
+                                {item.isSticker ? (
+                                    <div className="w-full aspect-square rounded-full border-[3px] border-gray-200 shadow-lg overflow-hidden mb-2 relative">
+                                        <img src={item.image} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/30 pointer-events-none"></div>
+                                    </div>
+                                ) : (
+                                    <div className="w-full overflow-hidden rounded-lg mb-2 bg-gray-100 border border-black/5">
+                                        <img src={item.image} className="w-full h-auto block grayscale hover:grayscale-0 transition-all" />
+                                    </div>
+                                )}
+                                <div className="px-1 text-center">
+                                    <div className="font-bold text-[10px] text-zinc-800 leading-tight">{item.title}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 text-center text-[10px] text-gray-400 font-mono">
+                        HOKURIKU TRIP MEMORY
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Actions - Stick to the bottom of the card */}
+            <div className="shrink-0 bg-zinc-900 border-t border-white/5 p-3 z-50">
+                 <div className="flex gap-2">
+                     {isExporting ? (
+                         <div className="w-full bg-zinc-800 text-zinc-400 py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold">
+                            <Loader2 className="animate-spin" size={14}/> 處理中...
+                         </div>
+                     ) : (
+                         <>
+                            <button onClick={() => handleExport('jpg')} className="flex-1 bg-zinc-800 text-white py-3 rounded-xl text-xs font-bold hover:bg-zinc-700 transition-colors flex justify-center items-center gap-2">
+                                <ImageIcon size={14}/> 下載圖片
+                            </button>
+                            <button onClick={() => handleExport('pdf')} className="flex-1 bg-zinc-800 text-white py-3 rounded-xl text-xs font-bold hover:bg-zinc-700 transition-colors flex justify-center items-center gap-2">
+                                <FileDown size={14}/> 下載 PDF
+                            </button>
+                         </>
+                     )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- Sub Views ---
 
 function ItineraryView({ user }) {
   const [plans, setPlans] = useState({});
@@ -678,7 +826,8 @@ function ExpensesView({ user, ocrReady }) {
   );
 }
 
-function MemoriesView({ user }) {
+// 接收 setShowMemoir, setMemoirItems 以便在點擊分享時呼叫
+function MemoriesView({ user, setShowMemoir, setMemoirItems }) {
   const [subTab, setSubTab] = useState('collection'); 
   return (
     <div className="space-y-6">
@@ -689,14 +838,14 @@ function MemoriesView({ user }) {
           </button>
         ))}
       </div>
-      {subTab === 'collection' && <CollectionView user={user} />}
+      {subTab === 'collection' && <CollectionView user={user} setShowMemoir={setShowMemoir} setMemoirItems={setMemoirItems} />}
       {subTab === 'diary' && <DiaryView user={user} />}
       {subTab === 'missions' && <MissionsView user={user} />}
     </div>
   );
 }
 
-function CollectionView({ user }) {
+function CollectionView({ user, setShowMemoir, setMemoirItems }) {
   const [items, setItems] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -704,7 +853,6 @@ function CollectionView({ user }) {
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
   const [isSticker, setIsSticker] = useState(false);
-  const [showMemoir, setShowMemoir] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -750,7 +898,11 @@ function CollectionView({ user }) {
     if(confirm("移除這張圖鑑卡？")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'collection', id));
   };
 
-  if (showMemoir) return <MemoirPreview items={items} onClose={() => setShowMemoir(false)} />;
+  // 打開預覽功能
+  const handleOpenPreview = () => {
+      setMemoirItems(items);
+      setShowMemoir(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -766,7 +918,7 @@ function CollectionView({ user }) {
             </label>
         )}
         
-        <button onClick={() => setShowMemoir(true)} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
+        <button onClick={handleOpenPreview} className="px-4 bg-zinc-800 rounded-xl border border-white/5 text-zinc-400 hover:text-white"><Share size={18} /></button>
       </div>
       
       <div className="grid grid-cols-3 gap-1.5">
@@ -822,149 +974,6 @@ function CollectionView({ user }) {
       )}
     </div>
   );
-}
-
-function MemoirPreview({ items, onClose }) {
-    const [isExporting, setIsExporting] = useState(false);
-    const contentRef = useRef(null);
-
-    const handleExport = async (type) => {
-        setIsExporting(true);
-        try {
-            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-            const element = contentRef.current;
-            if (!element) return;
-            
-            // 這裡有個技巧：為了截圖完整，我們暫時解除高度限制，截圖完再恢復 (雖然使用者看不到)
-            const canvas = await window.html2canvas(element, { 
-                scale: 2, 
-                useCORS: true, 
-                backgroundColor: '#ffffff',
-                scrollY: -window.scrollY // 修正捲動偏移
-            });
-
-            const dateStr = new Date().toISOString().split('T')[0];
-
-            if (type === 'jpg') {
-                const link = document.createElement('a');
-                link.download = `Hokuriku_Memoir_${dateStr}.jpg`;
-                link.href = canvas.toDataURL('image/jpeg', 0.9);
-                link.click();
-            } else if (type === 'pdf') {
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-                const { jsPDF } = window.jspdf;
-                const imgData = canvas.toDataURL('image/jpeg', 0.9);
-                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-                
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
-                const ratio = imgWidth / imgHeight;
-                const heightInPdf = pdfWidth / ratio;
-
-                // 如果圖片太長，自動分頁或拉長 PDF (這裡選用拉長頁面更適合手機觀看)
-                if (heightInPdf > pdfHeight) {
-                    const longPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, heightInPdf] });
-                    longPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
-                    longPdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
-                } else {
-                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, heightInPdf);
-                    pdf.save(`Hokuriku_Memoir_${dateStr}.pdf`);
-                }
-            }
-        } catch (error) {
-            console.error("Export failed:", error);
-            alert("匯出失敗，請重試");
-        } finally {
-            setIsExporting(false);
-        }
-    };
-
-    return (
-        // [關鍵修正 1] 使用 fixed inset-0 + z-[999] 確保覆蓋一切
-        // [關鍵修正 2] h-[100dvh] 強制使用裝置可見高度，忽略網址列
-        // [關鍵修正 3] flex-col 將畫面切分為：捲動區 + 底部按鈕區
-        <div className="fixed inset-0 z-[999] bg-zinc-900 flex flex-col h-[100dvh] overflow-hidden">
-            
-            {/* 關閉按鈕：浮動在最右上角，不影響佈局 */}
-            <div className="absolute top-4 right-4 z-[1000]">
-                <button 
-                    onClick={onClose} 
-                    className="bg-black/60 text-white p-2 rounded-full backdrop-blur-md border border-white/20 hover:bg-black/80 transition-colors shadow-lg active:scale-95"
-                >
-                    <X size={24}/>
-                </button>
-            </div>
-
-            {/* [中間層] 可捲動區域 (Scrollable Area)
-               flex-1: 吃掉除了底部按鈕以外的所有空間
-               overflow-y-auto: 只有這裡會出現捲軸
-               bg-zinc-900: 背景色
-            */}
-            <div className="flex-1 overflow-y-auto bg-zinc-900 w-full relative">
-                {/* 這是我們要截圖的白色紙張區域 */}
-                <div ref={contentRef} className="min-h-full w-full max-w-lg mx-auto bg-white text-black p-6 pb-24 md:p-10">
-                    <div className="flex justify-between items-start mb-2 pt-8">
-                        <h1 className="text-3xl md:text-4xl font-black tracking-tighter">COLLECTION</h1>
-                    </div>
-                    <h2 className="text-lg md:text-xl font-medium text-gray-500 mb-8 uppercase tracking-widest flex items-center gap-2">
-                        Winter 2025 <Sparkles size={16} />
-                    </h2>
-                    
-                    {/* 瀑布流內容 */}
-                    <div className="columns-2 gap-4 space-y-4">
-                        {items.map((item) => (
-                            <div key={item.id} className="break-inside-avoid mb-4 group">
-                                {item.isSticker ? (
-                                    <div className="w-full aspect-square rounded-full border-[4px] border-gray-200 shadow-xl overflow-hidden mb-2 relative transform hover:scale-105 transition-transform duration-500">
-                                        <img src={item.image} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/40 pointer-events-none"></div>
-                                    </div>
-                                ) : (
-                                    <div className="w-full overflow-hidden rounded-lg mb-2 bg-gray-100 shadow-sm border border-black/5">
-                                        <img src={item.image} className="w-full h-auto block grayscale group-hover:grayscale-0 transition-all duration-500" />
-                                    </div>
-                                )}
-                                <div className="px-1 text-center">
-                                    <div className="font-bold text-xs text-zinc-800 leading-tight">{item.title}</div>
-                                    <div className="text-[9px] font-mono text-gray-400 mt-0.5">{item.date?.split('/')[1]}/{item.date?.split('/')[2]}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-200 text-center text-xs text-gray-400 font-mono">
-                        HOKURIKU TRIP MEMORY
-                    </div>
-                </div>
-            </div>
-
-            {/* [底部層] 固定按鈕區 (Fixed Footer)
-                shrink-0: 禁止被壓縮，保證高度
-                z-50: 確保層級最高
-                pb-8: 給 iPhone 底部橫條 (Home Indicator) 留出緩衝區
-            */}
-            <div className="shrink-0 w-full bg-zinc-900 border-t border-white/10 p-4 pb-8 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-                 <div className="flex gap-3 justify-center max-w-lg mx-auto">
-                     {isExporting ? (
-                         <div className="bg-white/10 text-white px-6 py-3 rounded-full flex items-center gap-2 font-bold backdrop-blur-md border border-white/20">
-                            <Loader2 className="animate-spin" size={20}/> 輸出中...
-                         </div>
-                     ) : (
-                         <>
-                            <button onClick={() => handleExport('jpg')} className="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                                <ImageIcon size={18}/> 存圖片
-                            </button>
-                            <button onClick={() => handleExport('pdf')} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                                <FileDown size={18}/> 存 PDF
-                            </button>
-                         </>
-                     )}
-                </div>
-            </div>
-        </div>
-    );
 }
 
 function DiaryView({ user }) {
