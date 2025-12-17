@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket, MessageSquare
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket, MessageSquare, Mic, MicOff, Map as MapIcon, RotateCcw, PenTool
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -86,6 +86,8 @@ const CITIES = [
   { name: "小松 (Komatsu)", lat: 36.4026, lon: 136.4509 },
   { name: "新穗高 (Shinhotaka)", lat: 36.2892, lon: 137.5756 },
   { name: "宇奈月 (Unazuki)", lat: 36.8145, lon: 137.5815 },
+  { name: "高岡 (Takaoka)", lat: 36.7486, lon: 137.0270 },
+  { name: "白川鄉 (Shirakawa)", lat: 36.2562, lon: 136.9066 },
 ];
 
 const MISSIONS = [
@@ -218,6 +220,61 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
       </div>
     </div>
   );
+}
+
+// --- New Feature: Postcard Modal ---
+function PostcardModal({ item, onClose, weatherData }) {
+    const [isExporting, setIsExporting] = useState(false);
+    const cardRef = useRef(null);
+    const today = new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' });
+    const weather = weatherData || { temp: '2°', icon: '❄️', desc: 'Snowy' };
+
+    const handleDownload = async () => {
+        setIsExporting(true);
+        try {
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+            const canvas = await window.html2canvas(cardRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            const link = document.createElement('a');
+            link.download = `Hokuriku_Postcard_${Date.now()}.jpg`;
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+            onClose();
+        } catch(e) { console.error(e); alert("製作失敗"); } 
+        finally { setIsExporting(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/90 z-[90] flex items-center justify-center p-6 backdrop-blur-md">
+            <div className="w-full max-w-sm flex flex-col items-center">
+                 <div ref={cardRef} className="bg-white p-4 pb-8 rounded-none shadow-2xl w-full aspect-[4/5] flex flex-col relative overflow-hidden">
+                     <div className="flex-1 bg-gray-100 overflow-hidden relative mb-4">
+                         <img src={item.image} className="w-full h-full object-cover filter contrast-110" />
+                         <div className="absolute inset-0 border-[1px] border-black/5 pointer-events-none"></div>
+                     </div>
+                     <div className="flex justify-between items-end px-1">
+                         <div>
+                             <div className="text-[10px] tracking-[0.2em] text-gray-400 uppercase mb-1">Hokuriku Trip 2025</div>
+                             <h2 className="text-2xl font-serif font-bold text-zinc-900 leading-none">{item.title}</h2>
+                         </div>
+                         <div className="text-right">
+                             <div className="text-3xl">{weather.icon}</div>
+                             <div className="text-xs font-mono text-gray-500">{today} · {weather.temp}</div>
+                         </div>
+                     </div>
+                     <div className="mt-3 pt-3 border-t border-gray-200 text-xs font-serif italic text-gray-600">
+                         "{item.tag || 'My Memory'} in Winter Wonderland."
+                     </div>
+                 </div>
+                 
+                 <div className="mt-6 flex gap-4 w-full">
+                     <button onClick={onClose} className="flex-1 py-3 bg-zinc-800 text-zinc-400 rounded-xl font-bold">關閉</button>
+                     <button onClick={handleDownload} className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2">
+                         {isExporting ? <Loader2 className="animate-spin"/> : <><Download size={18}/> 儲存明信片</>}
+                     </button>
+                 </div>
+            </div>
+        </div>
+    );
 }
 
 function NavButton({ icon, label, active, onClick, color }) {
@@ -712,7 +769,7 @@ function WeatherView() {
              <h3 className="text-white font-bold flex items-center gap-2">
                 <CloudSnow size={18} className="text-sky-400"/> 天氣預報 & 下雪機率
              </h3>
-             {CITIES.map(city => {
+             {CITIES.slice(0, 5).map(city => {
                  const w = weather[city.name];
                  if(!w) return null;
                  
@@ -756,6 +813,8 @@ function ExpensesView({ user, ocrReady }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expenses, setExpenses] = useState([]);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [budget, setBudget] = useState(200000); 
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
 
   const categories = [
       { name: '🍔 食物', icon: <Utensils size={14}/>, color: 'text-orange-400 bg-orange-500/10' },
@@ -767,12 +826,24 @@ function ExpensesView({ user, ocrReady }) {
 
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'expenses'), (snap) => {
+    const unsubExp = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'expenses'), (snap) => {
       const items = [];
       snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
       setExpenses(items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
     });
+    
+    // Load Budget from settings
+    getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'budget')).then(doc => {
+        if(doc.exists()) setBudget(doc.data().amount);
+    });
+    
+    return unsubExp;
   }, [user]);
+
+  const handleSetBudget = async () => {
+      setIsEditingBudget(false);
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'budget'), { amount: Number(budget) });
+  };
 
   const handleFileChange = async (e) => {
       const file = e.target.files?.[0];
@@ -813,6 +884,13 @@ function ExpensesView({ user, ocrReady }) {
   };
 
   const total = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const remaining = budget - total;
+  const percent = Math.min(100, Math.max(0, (remaining / budget) * 100));
+  
+  // Color logic for gauge
+  let gaugeColor = 'bg-emerald-500';
+  if(percent < 50) gaugeColor = 'bg-yellow-500';
+  if(percent < 20) gaugeColor = 'bg-red-500';
 
   const stats = categories.map(cat => {
       const sum = expenses.filter(e => e.category === cat.name).reduce((a, b) => a + (b.amount || 0), 0);
@@ -821,24 +899,51 @@ function ExpensesView({ user, ocrReady }) {
 
   return (
     <div className="space-y-6">
-       <div className="bg-gradient-to-br from-amber-600 to-red-700 border border-amber-500/20 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-20"><Gift size={80} /></div>
-            <p className="text-amber-200/80 text-xs font-mono uppercase mb-1">總支出</p>
-            <h2 className="text-4xl font-black text-white font-mono">¥ {total.toLocaleString()}</h2>
-            <CreditCard className="absolute -bottom-6 -right-6 text-white/10 w-32 h-32" />
+       {/* New Budget Fuel Gauge */}
+       <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-3xl relative overflow-hidden">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-zinc-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <PieChart size={14}/> Budget Fuel
+                </h3>
+                <button onClick={()=>setIsEditingBudget(true)} className="text-zinc-500 hover:text-white"><Edit2 size={14}/></button>
+            </div>
             
-            <div className="mt-6 space-y-2">
-                {stats.slice(0, 3).map(stat => (
-                    stat.sum > 0 && (
-                        <div key={stat.name} className="flex items-center gap-2 text-xs">
-                            <span className="w-16 text-white/80">{stat.name.split(' ')[1]}</span>
-                            <div className="flex-1 h-1.5 bg-black/20 rounded-full overflow-hidden">
-                                <div className="h-full bg-white/90" style={{width: `${stat.percent}%`}}></div>
-                            </div>
-                            <span className="text-white font-mono">¥{stat.sum.toLocaleString()}</span>
-                        </div>
-                    )
-                ))}
+            {isEditingBudget ? (
+                <div className="flex gap-2 mb-4">
+                    <input type="number" value={budget} onChange={e=>setBudget(e.target.value)} className="bg-black border border-zinc-700 rounded-xl px-3 py-1 text-white w-full" />
+                    <button onClick={handleSetBudget} className="bg-emerald-600 px-3 rounded-xl text-xs font-bold">OK</button>
+                </div>
+            ) : (
+                <div className="relative pt-2 pb-6">
+                     <div className="flex justify-between text-xs font-mono text-zinc-500 mb-1">
+                         <span>¥0</span>
+                         <span>¥{Number(budget).toLocaleString()}</span>
+                     </div>
+                     <div className="h-4 bg-zinc-800 rounded-full overflow-hidden relative">
+                         <div className={`h-full ${gaugeColor} transition-all duration-1000 ease-out`} style={{width: `${percent}%`}}></div>
+                         {/* Tick marks */}
+                         <div className="absolute top-0 bottom-0 left-1/4 w-0.5 bg-black/20"></div>
+                         <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-black/20"></div>
+                         <div className="absolute top-0 bottom-0 left-3/4 w-0.5 bg-black/20"></div>
+                     </div>
+                     <div className="absolute top-8 left-0 right-0 text-center">
+                         <span className={`text-2xl font-black ${percent < 20 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                             {Math.round(percent)}%
+                         </span>
+                         <span className="text-zinc-500 text-xs ml-1">REMAINING</span>
+                     </div>
+                </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4 mt-2 pt-4 border-t border-zinc-800">
+                <div>
+                    <div className="text-zinc-500 text-[10px]">TOTAL SPENT</div>
+                    <div className="text-xl font-bold text-white">¥{total.toLocaleString()}</div>
+                </div>
+                <div className="text-right">
+                    <div className="text-zinc-500 text-[10px]">REMAINING</div>
+                    <div className={`text-xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-400'}`}>¥{remaining.toLocaleString()}</div>
+                </div>
             </div>
        </div>
 
@@ -892,23 +997,81 @@ function MemoriesView({ user, setShowMemoir, setMemoirItems }) {
   return (
     <div className="space-y-6">
       <div className="bg-zinc-800/50 p-1 rounded-2xl flex gap-1 border border-white/5">
-        {['collection', 'diary', 'missions'].map(tab => (
+        {['collection', 'diary', 'missions', 'map'].map(tab => (
           <button key={tab} onClick={() => setSubTab(tab)} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${subTab === tab ? 'bg-zinc-700 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}>
-            {tab === 'collection' && '📸 採集'} {tab === 'diary' && '📝 日記'} {tab === 'missions' && '🏆 成就'}
+            {tab === 'collection' && '📸 採集'} {tab === 'diary' && '📝 日記'} {tab === 'missions' && '🏆 成就'} {tab === 'map' && '🗺️ 地圖'}
           </button>
         ))}
       </div>
       {subTab === 'collection' && <CollectionView user={user} setShowMemoir={setShowMemoir} setMemoirItems={setMemoirItems} />}
       {subTab === 'diary' && <DiaryView user={user} />}
       {subTab === 'missions' && <MissionsView user={user} />}
+      {subTab === 'map' && <FootprintMap user={user} />}
     </div>
   );
 }
 
-// [補上] DiaryView Component
+// --- New Feature: Footprint Map ---
+function FootprintMap({ user }) {
+    // Abstract map logic: Normalize coordinates to canvas size
+    const width = 300;
+    const height = 400;
+    // Bounding box for Hokuriku Region (approx)
+    const minLat = 36.1; const maxLat = 36.85;
+    const minLon = 136.3; const maxLon = 137.6;
+
+    const getPos = (lat, lon) => {
+        const y = height - ((lat - minLat) / (maxLat - minLat)) * height;
+        const x = ((lon - minLon) / (maxLon - minLon)) * width;
+        return { x, y };
+    };
+
+    return (
+        <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-4 relative overflow-hidden min-h-[450px]">
+             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                 <MapIcon size={200} />
+             </div>
+             <h3 className="font-bold text-white mb-4 flex items-center gap-2 relative z-10"><MapPin size={18} className="text-red-400"/> 足跡地圖</h3>
+             
+             <div className="relative w-full h-[400px] bg-zinc-800/50 rounded-2xl border border-white/5 mx-auto">
+                 {/* Connection Lines (Abstract Route) */}
+                 <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
+                     <path d={`M ${getPos(36.4026, 136.4509).x} ${getPos(36.4026, 136.4509).y} L ${getPos(36.5613, 136.6562).x} ${getPos(36.5613, 136.6562).y}`} stroke="white" strokeWidth="2" strokeDasharray="5,5" />
+                     <path d={`M ${getPos(36.5613, 136.6562).x} ${getPos(36.5613, 136.6562).y} L ${getPos(36.6959, 137.2137).x} ${getPos(36.6959, 137.2137).y}`} stroke="white" strokeWidth="2" />
+                     <path d={`M ${getPos(36.6959, 137.2137).x} ${getPos(36.6959, 137.2137).y} L ${getPos(36.1408, 137.2513).x} ${getPos(36.1408, 137.2513).y}`} stroke="white" strokeWidth="2" />
+                 </svg>
+
+                 {/* Cities */}
+                 {CITIES.map(city => {
+                     const pos = getPos(city.lat, city.lon);
+                     // Check if valid within bounds
+                     if(pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height) return null;
+
+                     return (
+                         <div key={city.name} className="absolute flex flex-col items-center transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer" style={{ left: `${(pos.x / width) * 100}%`, top: `${(pos.y / height) * 100}%` }}>
+                             <div className="w-3 h-3 bg-white rounded-full ring-4 ring-black/50 group-hover:scale-150 transition-transform bg-gradient-to-br from-white to-gray-400"></div>
+                             <div className="mt-2 bg-black/80 text-[10px] px-2 py-1 rounded text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                                 {city.name}
+                             </div>
+                         </div>
+                     );
+                 })}
+                 
+                 {/* Legend */}
+                 <div className="absolute bottom-4 right-4 bg-black/60 p-2 rounded-lg text-[10px] text-zinc-400 font-mono border border-white/5">
+                     Abstract Hokuriku Map
+                 </div>
+             </div>
+        </div>
+    );
+}
+
+// --- Modified DiaryView with Voice Memo ---
 function DiaryView({ user }) {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
   
   useEffect(() => {
     if(!user) return;
@@ -919,6 +1082,37 @@ function DiaryView({ user }) {
       setNotes(msgs.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0)));
     });
   }, [user]);
+
+  // Voice Logic
+  const toggleRecording = () => {
+      if (isRecording) {
+          recognitionRef.current?.stop();
+          setIsRecording(false);
+      } else {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) { alert("瀏覽器不支援語音輸入"); return; }
+          
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'zh-TW';
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          
+          recognition.onresult = (event) => {
+              let transcript = '';
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                  transcript += event.results[i][0].transcript;
+              }
+              // Append to existing text but careful not to duplicate too much if re-rendering
+              // For simplicity, we just set the value. In prod, careful with cursor position.
+              setNewNote(prev => prev + transcript); 
+          };
+          
+          recognition.onerror = (e) => { console.error(e); setIsRecording(false); };
+          recognition.start();
+          recognitionRef.current = recognition;
+          setIsRecording(true);
+      }
+  };
 
   const handleSend = async () => {
     if (!newNote.trim()) return;
@@ -936,14 +1130,20 @@ function DiaryView({ user }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-white/10 rounded-2xl p-4">
+      <div className="bg-zinc-900 border border-white/10 rounded-2xl p-4 relative">
           <textarea 
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
-            placeholder="今天發生了什麼事..."
-            className="w-full bg-transparent text-white placeholder-zinc-600 resize-none outline-none h-24 mb-2"
+            placeholder="今天發生了什麼事... (按麥克風錄音)"
+            className="w-full bg-transparent text-white placeholder-zinc-600 resize-none outline-none h-24 mb-2 p-1"
           />
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+              <button 
+                onClick={toggleRecording} 
+                className={`p-2 rounded-full transition-all ${isRecording ? 'bg-red-500/20 text-red-500 animate-pulse ring-1 ring-red-500' : 'text-zinc-500 hover:text-white'}`}
+              >
+                  {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
               <button onClick={handleSend} disabled={!newNote.trim()} className="bg-sky-600 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50">紀錄</button>
           </div>
       </div>
@@ -961,7 +1161,6 @@ function DiaryView({ user }) {
   );
 }
 
-// [補上] MissionsView Component
 function MissionsView({ user }) {
   const [completed, setCompleted] = useState({});
 
@@ -1025,6 +1224,7 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('小物'); 
   const [isSticker, setIsSticker] = useState(false);
+  const [activePostcardItem, setActivePostcardItem] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -1094,7 +1294,7 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
       
       <div className="grid grid-cols-3 gap-1.5">
         {items.map(item => (
-            <div key={item.id} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden'}`}>
+            <div key={item.id} onClick={() => !item.isSticker && setActivePostcardItem(item)} className={`relative group aspect-square ${item.isSticker ? 'bg-transparent cursor-default' : 'bg-zinc-900 border border-white/5 rounded-lg overflow-hidden cursor-pointer'}`}>
                 <div className={`w-full h-full relative ${item.isSticker ? 'rounded-full border-2 border-white shadow-lg overflow-hidden scale-95' : ''}`}>
                     <img src={item.image} className="w-full h-full object-cover" />
                     {item.isSticker && <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/30 pointer-events-none rounded-full"></div>}
@@ -1142,6 +1342,11 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* Postcard Modal */}
+      {activePostcardItem && (
+          <PostcardModal item={activePostcardItem} onClose={() => setActivePostcardItem(null)} />
       )}
     </div>
   );
