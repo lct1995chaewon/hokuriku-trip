@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket, MessageSquare, Mic, MicOff, Map as MapIcon, RotateCcw, PenTool
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket, MessageSquare, Mic, MicOff, Map as MapIcon, RotateCcw, PenTool, Navigation
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 
 // --- API Key & Firebase Configuration ---
-const apiKey = "AIzaSyDtHSygulqJEVLdT-3apvPcs4_vpvOTchw"; 
-
+// 請確保你的 Firebase 設定是正確的
 let firebaseConfig;
 try {
   if (typeof __firebase_config !== 'undefined') {
@@ -17,6 +16,7 @@ try {
     throw new Error('Environment config not found');
   }
 } catch (e) {
+  // 這裡使用預設或 fallback 設定，實作時請換成你自己的
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -80,15 +80,35 @@ const DEFAULT_ITINERARY = {
 };
 
 const CITIES = [
-  { name: "金澤 (Kanazawa)", lat: 36.5613, lon: 136.6562 },
-  { name: "富山 (Toyama)", lat: 36.6959, lon: 137.2137 },
-  { name: "高山 (Takayama)", lat: 36.1408, lon: 137.2513 }, 
-  { name: "小松 (Komatsu)", lat: 36.4026, lon: 136.4509 },
-  { name: "新穗高 (Shinhotaka)", lat: 36.2892, lon: 137.5756 },
-  { name: "宇奈月 (Unazuki)", lat: 36.8145, lon: 137.5815 },
-  { name: "高岡 (Takaoka)", lat: 36.7486, lon: 137.0270 },
-  { name: "白川鄉 (Shirakawa)", lat: 36.2562, lon: 136.9066 },
+  { name: "金澤", en: "Kanazawa", lat: 36.5780, lon: 136.6482 },
+  { name: "富山", en: "Toyama", lat: 36.7001, lon: 137.2136 },
+  { name: "高山", en: "Takayama", lat: 36.1408, lon: 137.2513 }, 
+  { name: "新穗高", en: "Shinhotaka", lat: 36.2892, lon: 137.5756 },
+  { name: "宇奈月", en: "Unazuki", lat: 36.8145, lon: 137.5815 },
+  { name: "高岡", en: "Takaoka", lat: 36.7486, lon: 137.0270 },
+  { name: "白川鄉", en: "Shirakawa", lat: 36.2562, lon: 136.9066 },
+  { name: "小松機場", en: "Komatsu", lat: 36.3934, lon: 136.4077 },
 ];
+
+// Helper to inject Leaflet resources dynamically
+const loadLeaflet = () => {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(window.L); return; }
+    
+    // CSS
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    // JS
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => resolve(window.L);
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+};
 
 const MISSIONS = [
   { id: 'shinhotaka_view', title: '2156m 絕景', desc: '在新穗高山頂展望台拍照', location: '新穗高', icon: '🏔️' },
@@ -176,6 +196,30 @@ const SnowStyle = () => (
         animation-iteration-count: infinite;
         animation-timing-function: linear;
         z-index: 50;
+      }
+      /* Leaflet Custom Styles */
+      .custom-div-icon {
+        background: transparent;
+        border: none;
+      }
+      .city-marker {
+        background: #0ea5e9;
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #0ea5e9;
+        width: 12px;
+        height: 12px;
+      }
+      .city-label {
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: bold;
+        white-space: nowrap;
+        transform: translate(-50%, -150%);
+        border: 1px solid rgba(255,255,255,0.2);
       }
     `}</style>
 );
@@ -1011,59 +1055,78 @@ function MemoriesView({ user, setShowMemoir, setMemoirItems }) {
   );
 }
 
-// --- New Feature: Footprint Map ---
+// --- NEW Improved Leaflet Map ---
 function FootprintMap({ user }) {
-    // Abstract map logic: Normalize coordinates to canvas size
-    const width = 300;
-    const height = 400;
-    // Bounding box for Hokuriku Region (approx)
-    const minLat = 36.1; const maxLat = 36.85;
-    const minLon = 136.3; const maxLon = 137.6;
+  const mapRef = useRef(null);
+  const containerRef = useRef(null);
 
-    const getPos = (lat, lon) => {
-        const y = height - ((lat - minLat) / (maxLat - minLat)) * height;
-        const x = ((lon - minLon) / (maxLon - minLon)) * width;
-        return { x, y };
-    };
+  useEffect(() => {
+    loadLeaflet().then(L => {
+       if (containerRef.current && !mapRef.current) {
+         // Initialize Map
+         const map = L.map(containerRef.current, {
+           center: [36.5613, 136.9562],
+           zoom: 9,
+           zoomControl: false,
+           attributionControl: false
+         });
+         
+         // Dark Matter Basemap (Cool & Modern)
+         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+           maxZoom: 19
+         }).addTo(map);
 
-    return (
-        <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-4 relative overflow-hidden min-h-[450px]">
-             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                 <MapIcon size={200} />
-             </div>
-             <h3 className="font-bold text-white mb-4 flex items-center gap-2 relative z-10"><MapPin size={18} className="text-red-400"/> 足跡地圖</h3>
-             
-             <div className="relative w-full h-[400px] bg-zinc-800/50 rounded-2xl border border-white/5 mx-auto">
-                 {/* Connection Lines (Abstract Route) */}
-                 <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
-                     <path d={`M ${getPos(36.4026, 136.4509).x} ${getPos(36.4026, 136.4509).y} L ${getPos(36.5613, 136.6562).x} ${getPos(36.5613, 136.6562).y}`} stroke="white" strokeWidth="2" strokeDasharray="5,5" />
-                     <path d={`M ${getPos(36.5613, 136.6562).x} ${getPos(36.5613, 136.6562).y} L ${getPos(36.6959, 137.2137).x} ${getPos(36.6959, 137.2137).y}`} stroke="white" strokeWidth="2" />
-                     <path d={`M ${getPos(36.6959, 137.2137).x} ${getPos(36.6959, 137.2137).y} L ${getPos(36.1408, 137.2513).x} ${getPos(36.1408, 137.2513).y}`} stroke="white" strokeWidth="2" />
-                 </svg>
+         // Add Cities
+         CITIES.forEach(city => {
+            const icon = L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div class="city-marker"></div><div class="city-label">${city.name}</div>`
+            });
+            L.marker([city.lat, city.lon], { icon }).addTo(map);
+         });
 
-                 {/* Cities */}
-                 {CITIES.map(city => {
-                     const pos = getPos(city.lat, city.lon);
-                     // Check if valid within bounds
-                     if(pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height) return null;
+         // Draw Route (Polyline)
+         const points = CITIES.map(c => [c.lat, c.lon]);
+         // Re-order for logical route: Komatsu -> Kanazawa -> Shirakawa -> Takayama -> Shinhotaka -> Toyama -> Unazuki
+         // (Simplified approximate order based on locations)
+         const routePath = [
+             [36.3934, 136.4077], // Komatsu
+             [36.5780, 136.6482], // Kanazawa
+             [36.2562, 136.9066], // Shirakawa
+             [36.1408, 137.2513], // Takayama
+             [36.2892, 137.5756], // Shinhotaka
+             [36.7001, 137.2136], // Toyama
+             [36.8145, 137.5815], // Unazuki
+         ];
 
-                     return (
-                         <div key={city.name} className="absolute flex flex-col items-center transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer" style={{ left: `${(pos.x / width) * 100}%`, top: `${(pos.y / height) * 100}%` }}>
-                             <div className="w-3 h-3 bg-white rounded-full ring-4 ring-black/50 group-hover:scale-150 transition-transform bg-gradient-to-br from-white to-gray-400"></div>
-                             <div className="mt-2 bg-black/80 text-[10px] px-2 py-1 rounded text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                 {city.name}
-                             </div>
-                         </div>
-                     );
-                 })}
-                 
-                 {/* Legend */}
-                 <div className="absolute bottom-4 right-4 bg-black/60 p-2 rounded-lg text-[10px] text-zinc-400 font-mono border border-white/5">
-                     Abstract Hokuriku Map
-                 </div>
-             </div>
+         L.polyline(routePath, {
+             color: '#0ea5e9', // Sky blue
+             weight: 3,
+             dashArray: '5, 10',
+             opacity: 0.6
+         }).addTo(map);
+
+         mapRef.current = map;
+       }
+    });
+
+    return () => {
+        if(mapRef.current) {
+            mapRef.current.remove();
+            mapRef.current = null;
+        }
+    }
+  }, []);
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-1 relative overflow-hidden min-h-[450px]">
+        <div ref={containerRef} className="w-full h-[450px] rounded-[1.2rem] z-10 relative"></div>
+        <div className="absolute top-4 left-4 z-[400] bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-white flex items-center gap-2">
+            <Navigation size={12} className="text-sky-400"/>
+            Hokuriku Route
         </div>
-    );
+    </div>
+  );
 }
 
 // --- Modified DiaryView with Voice Memo ---
