@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket, MessageSquare
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -79,7 +79,6 @@ const DEFAULT_ITINERARY = {
   ]
 };
 
-// [新增] 加入了小松 (Komatsu)，高山原本就有
 const CITIES = [
   { name: "金澤 (Kanazawa)", lat: 36.5613, lon: 136.6562 },
   { name: "富山 (Toyama)", lat: 36.6959, lon: 137.2137 },
@@ -588,7 +587,6 @@ function AssistantView() {
     );
 }
 
-// [新增] Live Cams Component
 function LiveCams() {
     const cams = [
         { name: '新穗高 (Shinhotaka)', url: 'https://shinhotaka-ropeway.jp/', desc: '山頂展望台 / 纜車', color: 'bg-indigo-500/20 text-indigo-400' },
@@ -750,11 +748,10 @@ function WeatherView() {
     );
 }
 
-// [新增] 升級版記帳：類別 + 分布圖
 function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('🍔 食物'); // 預設類別
+  const [category, setCategory] = useState('🍔 食物'); 
   const [imagePreview, setImagePreview] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expenses, setExpenses] = useState([]);
@@ -788,7 +785,7 @@ function ExpensesView({ user, ocrReady }) {
               alert("圖片讀取失敗，請重試");
           }
       }
-      e.target.value = ''; // Reset input
+      e.target.value = ''; 
   };
 
   const handleSmartScan = async () => {
@@ -817,7 +814,6 @@ function ExpensesView({ user, ocrReady }) {
 
   const total = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
 
-  // 計算分類支出
   const stats = categories.map(cat => {
       const sum = expenses.filter(e => e.category === cat.name).reduce((a, b) => a + (b.amount || 0), 0);
       return { ...cat, sum, percent: total > 0 ? (sum / total) * 100 : 0 };
@@ -831,7 +827,6 @@ function ExpensesView({ user, ocrReady }) {
             <h2 className="text-4xl font-black text-white font-mono">¥ {total.toLocaleString()}</h2>
             <CreditCard className="absolute -bottom-6 -right-6 text-white/10 w-32 h-32" />
             
-            {/* 分類統計條 */}
             <div className="mt-6 space-y-2">
                 {stats.slice(0, 3).map(stat => (
                     stat.sum > 0 && (
@@ -907,6 +902,118 @@ function MemoriesView({ user, setShowMemoir, setMemoirItems }) {
       {subTab === 'diary' && <DiaryView user={user} />}
       {subTab === 'missions' && <MissionsView user={user} />}
     </div>
+  );
+}
+
+// [補上] DiaryView Component
+function DiaryView({ user }) {
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
+  
+  useEffect(() => {
+    if(!user) return;
+    const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'diary'));
+    return onSnapshot(q, (snapshot) => {
+      const msgs = [];
+      snapshot.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
+      setNotes(msgs.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0)));
+    });
+  }, [user]);
+
+  const handleSend = async () => {
+    if (!newNote.trim()) return;
+    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'diary'), {
+      text: newNote,
+      createdAt: serverTimestamp(),
+      date: new Date().toLocaleDateString('zh-TW')
+    });
+    setNewNote('');
+  };
+
+  const deleteNote = async (id) => {
+      if(confirm('刪除這則日記？')) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'diary', id));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-zinc-900 border border-white/10 rounded-2xl p-4">
+          <textarea 
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            placeholder="今天發生了什麼事..."
+            className="w-full bg-transparent text-white placeholder-zinc-600 resize-none outline-none h-24 mb-2"
+          />
+          <div className="flex justify-end">
+              <button onClick={handleSend} disabled={!newNote.trim()} className="bg-sky-600 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50">紀錄</button>
+          </div>
+      </div>
+      
+      <div className="space-y-3">
+          {notes.map(note => (
+              <div key={note.id} className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5 relative group">
+                  <div className="text-xs text-zinc-500 mb-2 font-mono">{note.date}</div>
+                  <div className="text-white text-sm whitespace-pre-wrap leading-relaxed">{note.text}</div>
+                  <button onClick={()=>deleteNote(note.id)} className="absolute top-2 right-2 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
+              </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+// [補上] MissionsView Component
+function MissionsView({ user }) {
+  const [completed, setCompleted] = useState({});
+
+  useEffect(() => {
+    if(!user) return;
+    return onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', 'status'), (doc) => {
+       if(doc.exists()) setCompleted(doc.data());
+    });
+  }, [user]);
+
+  const toggleMission = async (id) => {
+      const newStatus = !completed[id];
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', 'status'), {
+          ...completed, [id]: newStatus
+      });
+  };
+
+  const progress = Math.round((Object.values(completed).filter(Boolean).length / MISSIONS.length) * 100);
+
+  return (
+      <div className="space-y-6">
+          <div className="bg-gradient-to-r from-yellow-600 to-amber-700 p-6 rounded-3xl relative overflow-hidden shadow-lg">
+              <div className="relative z-10">
+                  <div className="text-amber-200 text-xs font-bold uppercase tracking-wider mb-1">Total Progress</div>
+                  <div className="text-4xl font-black text-white">{progress}%</div>
+                  <div className="w-full bg-black/20 h-2 rounded-full mt-4 overflow-hidden">
+                      <div className="bg-white h-full transition-all duration-1000" style={{width: `${progress}%`}}></div>
+                  </div>
+              </div>
+              <Trophy className="absolute right-[-20px] bottom-[-20px] w-32 h-32 text-white/10 rotate-12" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+              {MISSIONS.map(m => {
+                  const isDone = !!completed[m.id];
+                  return (
+                      <button key={m.id} onClick={()=>toggleMission(m.id)} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group ${isDone ? 'bg-amber-900/20 border-amber-500/30' : 'bg-zinc-900 border-white/5 hover:border-white/10'}`}>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl transition-all ${isDone ? 'bg-amber-500 text-black scale-110 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-800 grayscale opacity-50'}`}>
+                              {m.icon}
+                          </div>
+                          <div className="flex-1">
+                              <div className={`font-bold text-sm ${isDone ? 'text-amber-100' : 'text-zinc-400'}`}>{m.title}</div>
+                              <div className="text-xs text-zinc-600 mt-0.5">{m.desc}</div>
+                          </div>
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'border-amber-500 bg-amber-500 text-black' : 'border-zinc-700'}`}>
+                              {isDone && <CheckCircle2 size={14} />}
+                          </div>
+                      </button>
+                  )
+              })}
+          </div>
+      </div>
   );
 }
 
