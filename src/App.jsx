@@ -6,8 +6,11 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 
-// --- API Key & Firebase Configuration ---
-// 請確保你的 Firebase 設定是正確的
+// --- API Key Configuration ---
+// ⚠️ 安全設定：這裡留空，請在 App 介面中手動輸入 Key
+const DEFAULT_GEMINI_KEY = "";
+
+// --- Firebase Configuration ---
 let firebaseConfig;
 try {
   if (typeof __firebase_config !== 'undefined') {
@@ -16,7 +19,7 @@ try {
     throw new Error('Environment config not found');
   }
 } catch (e) {
-  // 這裡使用預設或 fallback 設定，實作時請換成你自己的
+  // Fallback config (請替換為您自己的 Firebase config 以確保資料持久化)
   firebaseConfig = {
     apiKey: "AIzaSyBp8BT3jNSo_46-5dfWLkJ69wSEtlv5PZ4",
     authDomain: "hokuriku-trip.firebaseapp.com",
@@ -90,26 +93,6 @@ const CITIES = [
   { name: "小松機場", en: "Komatsu", lat: 36.3934, lon: 136.4077 },
 ];
 
-// Helper to inject Leaflet resources dynamically
-const loadLeaflet = () => {
-  return new Promise((resolve, reject) => {
-    if (window.L) { resolve(window.L); return; }
-    
-    // CSS
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-
-    // JS
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = () => resolve(window.L);
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-};
-
 const MISSIONS = [
   { id: 'shinhotaka_view', title: '2156m 絕景', desc: '在新穗高山頂展望台拍照', location: '新穗高', icon: '🏔️' },
   { id: 'starbucks_light', title: '最美星巴克', desc: '拍下環水公園聖誕點燈', location: '富山', icon: '☕' },
@@ -133,6 +116,25 @@ const PHRASES = [
 ];
 
 // --- Helpers ---
+const loadLeaflet = () => {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(window.L); return; }
+    
+    // CSS
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    // JS
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => resolve(window.L);
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+};
+
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
@@ -342,6 +344,138 @@ function ExternalLinkItem({ title, desc, url, color }) {
             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 group-hover:text-white"><ExternalLink size={14} /></div>
         </a>
     );
+}
+
+// --- MenuTranslator Component (AI Vision) ---
+function MenuTranslator() {
+  const [image, setImage] = useState(null);
+  const [result, setResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || DEFAULT_GEMINI_KEY);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // 儲存 API Key
+  const handleSaveKey = () => {
+    localStorage.setItem('gemini_api_key', apiKey);
+    setShowSettings(false);
+    alert("API Key 已儲存！");
+  };
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const base64 = await compressImage(file); // 使用既有的壓縮函式
+        setImage(base64);
+        setResult(null); // 清空舊結果
+      } catch (e) {
+        alert("圖片讀取失敗");
+      }
+    }
+  };
+
+  const analyzeMenu = async () => {
+    if (!apiKey) { alert("請先設定 Gemini API Key"); setShowSettings(true); return; }
+    if (!image) return;
+
+    setIsLoading(true);
+    try {
+      // 移除 Base64 header, 只保留數據部分
+      const base64Data = image.split(',')[1];
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: "你是一位精通日本料理的美食家。請分析這張菜單圖片。請找出主要的菜色，並用繁體中文列點回覆：\n1. 菜名 (日文 -> 中文)\n2. 食材與口感簡介\n3. ⚠️ 警語：是否會辣？是否有內臟？(如果是生的請標註)\n4. 推薦指數 (1-5星)" },
+              { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+            ]
+          }]
+        })
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      
+      const text = data.candidates[0].content.parts[0].text;
+      setResult(text);
+    } catch (e) {
+      console.error(e);
+      alert("分析失敗，請檢查 API Key 或網路。\n" + e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-5 relative overflow-hidden space-y-4 shadow-xl">
+      <div className="flex justify-between items-center">
+        <h3 className="text-white font-bold flex items-center gap-2">
+          <Sparkles size={18} className="text-purple-400"/> AI 菜單解碼
+        </h3>
+        <button onClick={() => setShowSettings(!showSettings)} className="text-zinc-500 hover:text-white p-2">
+          {apiKey ? <div className="w-2 h-2 bg-emerald-500 rounded-full"></div> : <PenTool size={14}/>}
+        </button>
+      </div>
+
+      {showSettings && (
+        <div className="bg-black/50 p-3 rounded-xl border border-zinc-700 animate-in slide-in-from-top-2">
+          <div className="text-[10px] text-zinc-400 mb-1">Google Gemini API Key</div>
+          <div className="flex gap-2">
+            <input 
+              type="password" 
+              placeholder="貼上 API Key" 
+              value={apiKey} 
+              onChange={e => setApiKey(e.target.value)}
+              className="flex-1 bg-zinc-800 text-white text-xs p-2 rounded-lg border border-zinc-600 focus:border-purple-500 outline-none"
+            />
+            <button onClick={handleSaveKey} className="bg-purple-600 text-white px-3 rounded-lg text-xs font-bold">儲存</button>
+          </div>
+          <div className="text-[9px] text-zinc-600 mt-1">Key 僅儲存於您的手機端</div>
+        </div>
+      )}
+
+      {!image ? (
+        <label className="block w-full aspect-video border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-500 cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all">
+          <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+          <Camera size={24} className="mb-2"/>
+          <span className="text-xs">拍菜單 / 上傳照片</span>
+        </label>
+      ) : (
+        <div className="space-y-4">
+          <div className="relative w-full max-h-48 overflow-hidden rounded-xl border border-zinc-700">
+            <img src={image} className="w-full object-cover" />
+            <button onClick={() => {setImage(null); setResult(null);}} className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full"><X size={14}/></button>
+          </div>
+          
+          {!result && (
+            <button 
+              onClick={analyzeMenu} 
+              disabled={isLoading}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
+            >
+              {isLoading ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18}/> 開始解讀</>}
+            </button>
+          )}
+        </div>
+      )}
+
+      {result && (
+        <div className="bg-zinc-800/50 p-4 rounded-xl border border-white/5 animate-in fade-in">
+          <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed whitespace-pre-wrap">
+             {result.split('\n').map((line, i) => {
+               if (line.startsWith('###')) return <h4 key={i} className="text-purple-300 font-bold mt-2 mb-1">{line.replace('###', '')}</h4>;
+               if (line.includes('⚠️')) return <div key={i} className="text-red-300 font-bold bg-red-900/20 p-2 rounded-lg my-1">{line}</div>;
+               return <div key={i} className={line.startsWith('**') ? 'font-bold text-white mt-2' : 'text-zinc-300'}>{line.replace(/\*\*/g, '')}</div>;
+             })}
+          </div>
+          <button onClick={() => {setImage(null); setResult(null);}} className="w-full mt-4 py-2 bg-zinc-700 text-white rounded-lg text-xs font-bold">分析下一張</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // --- Main App Component ---
@@ -679,6 +813,7 @@ function ItineraryView({ user }) {
 function AssistantView() {
     return (
         <div className="space-y-6 animate-in fade-in">
+             <MenuTranslator />
              <WeatherView />
              <LiveCams />
              <TrafficBoard />
