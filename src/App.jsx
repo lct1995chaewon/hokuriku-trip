@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay
+  Calendar, CloudSnow, Camera, CreditCard, Trash2, CloudRain, Sun, Umbrella, Cloud, CloudLightning, RefreshCw, ShieldAlert, Phone, ExternalLink, AlertTriangle, Award, CheckCircle2, Trophy, Clock, Plus, MapPin, X, Image as ImageIcon, Edit2, ScanLine, Sparkles, Loader2, Plane, ChevronRight, Train, Languages, LayoutGrid, Bed, Utensils, BookOpen, Share, Gift, TreePine, Download, FileDown, Video, MonitorPlay, PieChart, ShoppingBag, Coffee, Ticket
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -79,12 +79,12 @@ const DEFAULT_ITINERARY = {
   ]
 };
 
-// [新增] 已經加入高山 (Takayama)
+// [新增] 加入了小松 (Komatsu)，高山原本就有
 const CITIES = [
   { name: "金澤 (Kanazawa)", lat: 36.5613, lon: 136.6562 },
   { name: "富山 (Toyama)", lat: 36.6959, lon: 137.2137 },
   { name: "高山 (Takayama)", lat: 36.1408, lon: 137.2513 }, 
-  { name: "高岡 (Takaoka)", lat: 36.7550, lon: 137.0210 },
+  { name: "小松 (Komatsu)", lat: 36.4026, lon: 136.4509 },
   { name: "新穗高 (Shinhotaka)", lat: 36.2892, lon: 137.5756 },
   { name: "宇奈月 (Unazuki)", lat: 36.8145, lon: 137.5815 },
 ];
@@ -250,7 +250,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('itinerary'); 
   const [ocrReady, setOcrReady] = useState(false);
   
-  // 狀態提升：讓 App 掌控預覽層的顯示
   const [showMemoir, setShowMemoir] = useState(false);
   const [memoirItems, setMemoirItems] = useState([]);
 
@@ -277,7 +276,6 @@ export default function App() {
     <div className="flex flex-col h-screen bg-black text-gray-100 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-zinc-800">
       <SnowOverlay />
       
-      {/* Background Blobs */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full bg-rose-900/20 blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] rounded-full bg-emerald-900/20 blur-[100px]"></div>
@@ -593,6 +591,7 @@ function AssistantView() {
 // [新增] Live Cams Component
 function LiveCams() {
     const cams = [
+        { name: '新穗高 (Shinhotaka)', url: 'https://shinhotaka-ropeway.jp/', desc: '山頂展望台 / 纜車', color: 'bg-indigo-500/20 text-indigo-400' },
         { name: '高山 (Takayama)', url: 'https://www.youtube.com/results?search_query=takayama+live+camera', desc: '宮川朝市 / 古街雪況', color: 'bg-amber-500/20 text-amber-400' },
         { name: '富山 (Toyama)', url: 'https://www.knb.ne.jp/live_camera/', desc: '富山車站 / 市區', color: 'bg-blue-500/20 text-blue-400' },
         { name: '宇奈月 (Unazuki)', url: 'https://www.kurobe-unazuki.jp/livecam/', desc: '溫泉街 / 峽谷入口', color: 'bg-emerald-500/20 text-emerald-400' },
@@ -603,7 +602,7 @@ function LiveCams() {
              <h3 className="text-white font-bold flex items-center gap-2">
                 <MonitorPlay size={18} className="text-red-400"/> LIVE CAM 即時影像
              </h3>
-             <div className="grid grid-cols-3 gap-3">
+             <div className="grid grid-cols-2 gap-3">
                  {cams.map((cam, i) => (
                      <a key={i} href={cam.url} target="_blank" rel="noopener noreferrer" className="bg-zinc-900 border border-white/10 rounded-xl p-3 flex flex-col items-center text-center hover:bg-zinc-800 transition-colors group">
                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${cam.color}`}>
@@ -751,13 +750,23 @@ function WeatherView() {
     );
 }
 
+// [新增] 升級版記帳：類別 + 分布圖
 function ExpensesView({ user, ocrReady }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('🍔 食物'); // 預設類別
   const [imagePreview, setImagePreview] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expenses, setExpenses] = useState([]);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+
+  const categories = [
+      { name: '🍔 食物', icon: <Utensils size={14}/>, color: 'text-orange-400 bg-orange-500/10' },
+      { name: '🚌 交通', icon: <Train size={14}/>, color: 'text-blue-400 bg-blue-500/10' },
+      { name: '🛍️ 購物', icon: <ShoppingBag size={14}/>, color: 'text-pink-400 bg-pink-500/10' },
+      { name: '🏨 住宿', icon: <Bed size={14}/>, color: 'text-purple-400 bg-purple-500/10' },
+      { name: '🎫 娛樂', icon: <Ticket size={14}/>, color: 'text-green-400 bg-green-500/10' },
+  ];
 
   useEffect(() => {
     if (!user) return;
@@ -801,12 +810,18 @@ function ExpensesView({ user, ocrReady }) {
 
   const handleAdd = async () => {
       await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expenses'), {
-        amount: Number(amount), description, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW'), hasImage: !!imagePreview 
+        amount: Number(amount), description, category, createdAt: serverTimestamp(), date: new Date().toLocaleDateString('zh-TW'), hasImage: !!imagePreview 
       });
       setAmount(''); setDescription(''); setImagePreview(null);
   };
 
   const total = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+  // 計算分類支出
+  const stats = categories.map(cat => {
+      const sum = expenses.filter(e => e.category === cat.name).reduce((a, b) => a + (b.amount || 0), 0);
+      return { ...cat, sum, percent: total > 0 ? (sum / total) * 100 : 0 };
+  }).sort((a,b) => b.sum - a.sum);
 
   return (
     <div className="space-y-6">
@@ -815,7 +830,23 @@ function ExpensesView({ user, ocrReady }) {
             <p className="text-amber-200/80 text-xs font-mono uppercase mb-1">總支出</p>
             <h2 className="text-4xl font-black text-white font-mono">¥ {total.toLocaleString()}</h2>
             <CreditCard className="absolute -bottom-6 -right-6 text-white/10 w-32 h-32" />
+            
+            {/* 分類統計條 */}
+            <div className="mt-6 space-y-2">
+                {stats.slice(0, 3).map(stat => (
+                    stat.sum > 0 && (
+                        <div key={stat.name} className="flex items-center gap-2 text-xs">
+                            <span className="w-16 text-white/80">{stat.name.split(' ')[1]}</span>
+                            <div className="flex-1 h-1.5 bg-black/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white/90" style={{width: `${stat.percent}%`}}></div>
+                            </div>
+                            <span className="text-white font-mono">¥{stat.sum.toLocaleString()}</span>
+                        </div>
+                    )
+                ))}
+            </div>
        </div>
+
        <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[2rem] space-y-4">
            <div className="flex justify-between"><h3 className="text-white font-bold">新增消費</h3><button onClick={handleSmartScan} disabled={!imagePreview||!ocrReady} className="text-amber-400 text-xs flex items-center gap-1"><ScanLine size={12}/> OCR</button></div>
            
@@ -825,17 +856,28 @@ function ExpensesView({ user, ocrReady }) {
                {isAnalyzing && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-amber-400 text-xs">分析中...</div>}
            </label>
 
+           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+               {categories.map(cat => (
+                   <button key={cat.name} onClick={()=>setCategory(cat.name)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${category === cat.name ? 'bg-amber-500 text-black border-amber-500' : 'bg-transparent text-zinc-500 border-zinc-700'}`}>
+                       {cat.name}
+                   </button>
+               ))}
+           </div>
+
            <div className="flex gap-2">
                <input type="number" placeholder="¥" value={amount} onChange={e=>setAmount(e.target.value)} className="w-1/3 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
                <input type="text" placeholder="品項" value={description} onChange={e=>setDescription(e.target.value)} className="flex-1 bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm" />
            </div>
            <button onClick={handleAdd} className="w-full bg-white text-black py-3 rounded-xl font-bold">儲存</button>
        </div>
+
        <div className="space-y-2">
            {expenses.map(item => (
                <div key={item.id} className="flex justify-between items-center bg-zinc-900/60 p-4 rounded-xl border border-white/5">
                    <div className="flex gap-3 items-center">
-                       <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">{item.hasImage?<ImageIcon size={14}/>:<CreditCard size={14}/>}</div>
+                       <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-lg">
+                           {item.category?.split(' ')[0] || '💸'}
+                       </div>
                        <div><div className="text-white text-sm font-bold">{item.description}</div><div className="text-xs text-zinc-500">{item.date}</div></div>
                    </div>
                    <div className="flex items-center gap-3">
@@ -994,136 +1036,6 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
               </div>
           </div>
       )}
-    </div>
-  );
-}
-
-function DiaryView({ user }) {
-  const [diaries, setDiaries] = useState({});
-  const [activeDay, setActiveDay] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  useEffect(() => {
-    if(!user) return;
-    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'diary'), (snap) => {
-        const d = {}; snap.forEach(doc => d[doc.id] = doc.data().content); setDiaries(d);
-    });
-  }, [user]);
-  const handleSave = async () => {
-    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'diary', `day-${activeDay}`), { content: draft, updatedAt: serverTimestamp() });
-    setIsEditing(false);
-  };
-  return (
-    <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 min-h-[500px] flex flex-col">
-       <div className="flex overflow-x-auto gap-2 mb-6 pb-2 no-scrollbar">
-           {DATES.map((date, idx) => (<button key={idx} onClick={()=>{setActiveDay(idx); setIsEditing(false);}} className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeDay === idx ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-500'}`}>{date.split(' ')[0]}</button>))}
-       </div>
-       <div className="flex-1 flex flex-col">
-           <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-white">{DATES[activeDay]} 的日記</h3><button onClick={()=>{setDraft(diaries[`day-${activeDay}`]||''); setIsEditing(!isEditing);}} className="text-zinc-400 hover:text-white"><Edit2 size={18}/></button></div>
-           {isEditing ? (
-               <><textarea value={draft} onChange={(e)=>setDraft(e.target.value)} className="flex-1 bg-black/50 border border-zinc-700 rounded-2xl p-4 text-zinc-200 resize-none outline-none focus:border-amber-500" placeholder="今天發生了什麼有趣的事？..." /><button onClick={handleSave} className="mt-4 w-full bg-white text-black py-3 rounded-xl font-bold">儲存日記</button></>
-           ) : (<div className="flex-1 text-zinc-300 whitespace-pre-wrap leading-relaxed">{diaries[`day-${activeDay}`] || <span className="text-zinc-700 italic">點擊編輯按鈕開始記錄...</span>}</div>)}
-       </div>
-    </div>
-  );
-}
-
-function MissionsView({ user }) {
-  const [missionData, setMissionData] = useState({});
-  const [activeMissionId, setActiveMissionId] = useState(null);
-  const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    if(!user) return;
-    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'missions'), (snap) => {
-        const d = {}; 
-        snap.forEach(doc => d[doc.id] = doc.data()); 
-        setMissionData(d);
-    });
-  }, [user]);
-
-  const handleFileChange = async (e, missionId) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      setUploading(true);
-      try {
-          const compressed = await compressImage(file);
-          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', missionId), { 
-              completed: true, 
-              image: compressed,
-              completedAt: serverTimestamp()
-          }, { merge: true });
-          
-      } catch (error) {
-          console.error(error);
-          alert("上傳失敗: " + error.message);
-      } finally {
-          setUploading(false);
-          setActiveMissionId(null);
-          e.target.value = '';
-      }
-  };
-
-  const deleteMissionPhoto = async (id) => {
-      if(!confirm("確定要刪除照片並重置任務嗎？")) return;
-      await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'missions', id));
-  };
-
-  return (
-    <div className="space-y-4 pb-20">
-        {uploading && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-                <div className="bg-zinc-900 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
-                    <Loader2 className="animate-spin text-amber-500"/> <span className="text-white font-bold">照片上傳中...</span>
-                </div>
-            </div>
-        )}
-
-        {MISSIONS.map(m => {
-            const data = missionData[m.id];
-            const isCompleted = !!data?.completed;
-            const hasImage = !!data?.image;
-
-            return (
-                <div key={m.id} className={`rounded-2xl border transition-all overflow-hidden ${isCompleted ? 'bg-zinc-900/80 border-emerald-500/50' : 'bg-zinc-900 border-white/5'}`}>
-                    <div className="p-4 flex justify-between items-start">
-                        <div className="flex gap-4">
-                            <div className="mt-1 text-2xl filter drop-shadow-lg">{m.icon}</div>
-                            <div>
-                                <div className={`font-bold text-lg ${isCompleted ? 'text-emerald-400' : 'text-zinc-200'}`}>{m.title}</div>
-                                <div className="text-xs text-zinc-500 mb-1">{m.desc}</div>
-                                <div className="flex items-center gap-1 text-[10px] text-zinc-400">
-                                    <MapPin size={10}/> {m.location}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {isCompleted ? (
-                            <button onClick={() => deleteMissionPhoto(m.id)} className="text-zinc-600 hover:text-red-400 transition-colors p-2">
-                                <Trash2 size={18} />
-                            </button>
-                        ) : (
-                            <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 p-3 rounded-xl transition-colors border border-white/5 flex flex-col items-center gap-1 group cursor-pointer">
-                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, m.id)} style={{opacity: 0, width: 0.1, height: 0.1, position: 'absolute'}} />
-                                <Camera size={20} className="group-hover:text-white transition-colors"/>
-                            </label>
-                        )}
-                    </div>
-
-                    {hasImage && (
-                        <div className="relative h-48 w-full mt-2 group">
-                            <img src={data.image} className="w-full h-full object-cover opacity-90" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-4">
-                                <span className="text-emerald-400 text-xs font-bold font-mono flex items-center gap-2 border border-emerald-400/30 bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
-                                    <Trophy size={12}/> MISSION COMPLETED
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        })}
     </div>
   );
 }
