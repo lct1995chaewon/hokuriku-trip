@@ -825,10 +825,10 @@ function AssistantView() {
 
 function LiveCams() {
     const cams = [
-        { name: '新穗高 (Shinhotaka)', url: 'https://shinhotaka-ropeway.jp/', desc: '山頂展望台 / 纜車', color: 'bg-indigo-500/20 text-indigo-400' },
-        { name: '高山 (Takayama)', url: 'https://www.youtube.com/results?search_query=takayama+live+camera', desc: '宮川朝市 / 古街雪況', color: 'bg-amber-500/20 text-amber-400' },
-        { name: '富山 (Toyama)', url: 'https://www.knb.ne.jp/live_camera/', desc: '富山車站 / 市區', color: 'bg-blue-500/20 text-blue-400' },
-        { name: '宇奈月 (Unazuki)', url: 'https://www.kurobe-unazuki.jp/livecam/', desc: '溫泉街 / 峽谷入口', color: 'bg-emerald-500/20 text-emerald-400' },
+        { name: '新穗高 (Shinhotaka)', url: 'https://www.youtube.com/embed/DXIvXVeX7aM?autoplay=1&mute=1&playsinline=1', desc: '山頂展望台 / 纜車', color: 'bg-indigo-500/20 text-indigo-400' },
+        { name: '高山 (Takayama)', url: 'https://www.youtube.com/embed/0a5M5zXbtEY?autoplay=1&mute=1&playsinline=1', desc: '古街雪況', color: 'bg-amber-500/20 text-amber-400' },
+        { name: '富山 (Toyama)', url: 'https://www.youtube.com/embed/YiX6DQ_dJ0I?autoplay=1&mute=1&playsinline=1', desc: '富山車站', color: 'bg-blue-500/20 text-blue-400' },
+        { name: '宇奈月 (Unazuki)', url: 'https://www.youtube.com/watch?v=rKAvLfNLRZU?autoplay=1&mute=1&playsinline=1', desc: '溫泉街 / 峽谷入口', color: 'bg-emerald-500/20 text-emerald-400' },
     ];
 
     return (
@@ -1549,4 +1549,5 @@ function CollectionView({ user, setShowMemoir, setMemoirItems }) {
     </div>
   );
 }
+
 
